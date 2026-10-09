@@ -1,0 +1,11 @@
+# Konteks lomba, tidak ikut repo
+konteks_sparta.txt
+
+# Hasil build APK
+*.apk
+*.aab
+
+# Editor / OS
+.vscode/
+.DS_Store
+Thumbs.db

@@ -292,6 +292,126 @@ enum ReportStatus {
   final String note;
 }
 
+/// Jenis kejadian yang bisa dilaporkan lewat suara, sama dengan parameter
+/// `type` pada tool `report_traffic`.
+enum IncidentType {
+  macet('macet', 'Macet', 'macet', Icons.traffic_rounded, ReportCategory.gangguan),
+  kecelakaan('kecelakaan', 'Kecelakaan', 'kecelakaan', Icons.car_crash_outlined, ReportCategory.kecelakaan),
+  banjir('banjir', 'Banjir', 'genangan', Icons.flood_outlined, ReportCategory.banjir),
+  jalanDitutup('jalan_ditutup', 'Jalan ditutup', 'penutupan jalan', Icons.block_rounded, ReportCategory.jalanDitutup),
+  lainnya('lainnya', 'Gangguan lain', 'gangguan', Icons.warning_amber_rounded, ReportCategory.gangguan);
+
+  const IncidentType(this.wire, this.label, this.spoken, this.icon, this.category);
+
+  /// Nilai yang dikirim ke Pulse.
+  final String wire;
+  final String label;
+
+  /// Sebutan di kalimat siaran, mis. "ada genangan di Jalan X".
+  final String spoken;
+  final IconData icon;
+  final ReportCategory category;
+}
+
+enum Severity {
+  ringan('Ringan'),
+  sedang('Sedang'),
+  parah('Parah');
+
+  const Severity(this.label);
+  final String label;
+}
+
+/// Satu panggilan tool `report_traffic`. Jenis dan tingkat keparahan berasal
+/// dari jawaban pengguna; sisanya diisi otomatis dari posisi kendaraan, tidak
+/// pernah dari pemahaman bahasa.
+class TrafficCall {
+  const TrafficCall({
+    required this.type,
+    required this.severity,
+    required this.position,
+    required this.heading,
+    required this.speedKmh,
+    required this.road,
+    required this.timestamp,
+    this.crawling = false,
+    this.utterances = 1,
+    this.seconds = 0,
+  });
+  final IncidentType type;
+  final Severity severity;
+  final LatLng position;
+  final double heading;
+  final int speedKmh;
+
+  /// Kecepatan saat melapor jauh di bawah normal ruas, sehingga laporan macet
+  /// langsung didukung data kecepatan.
+  final bool crawling;
+
+  /// Nama jalan tempat laporan dibuat, tanpa awalan "Jl.".
+  final String road;
+  final DateTime timestamp;
+
+  /// Jumlah ucapan pengguna dan detik dari pertanyaan sampai laporan siap
+  /// dikirim, untuk dibandingkan dengan laporan lewat formulir.
+  final int utterances;
+  final int seconds;
+
+  String get segmentId => 'sby-${road.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-')}';
+
+  Map<String, dynamic> toJson() => {
+    'name': 'report_traffic',
+    'parameters': {'type': type.wire, 'severity': severity.name},
+    'auto_filled': {
+      'lat': double.parse(position.latitude.toStringAsFixed(5)),
+      'lng': double.parse(position.longitude.toStringAsFixed(5)),
+      'heading': heading.round(),
+      'timestamp': timestamp.toIso8601String(),
+      'road_segment_id': segmentId,
+      'speed': speedKmh,
+    },
+  };
+}
+
+/// Ruas macet simulasi dalam meter dari awal rute; kendaraan melaju [factor]
+/// kali kecepatan normal di dalamnya.
+class SlowZone {
+  const SlowZone(this.from, this.to, this.factor);
+  final double from;
+  final double to;
+  final double factor;
+}
+
+/// Kejadian dari Pulse/Ephor di sekitar perjalanan, bahan Mode Siaran.
+class RoadEvent {
+  const RoadEvent({
+    required this.id,
+    required this.type,
+    required this.road,
+    this.routeIndex,
+    this.fraction = 0,
+    this.lengthMeters = 0,
+    this.delayMinutes = 0,
+    this.verified = true,
+  });
+  final String id;
+  final IncidentType type;
+  final String road;
+
+  /// Rute yang dilewati kejadian ini; null jika berada di luar semua rute.
+  final int? routeIndex;
+
+  /// Posisi di sepanjang rute, 0 sampai 1.
+  final double fraction;
+
+  /// Panjang antrean; 0 untuk kejadian di satu titik.
+  final double lengthMeters;
+  final int delayMinutes;
+
+  /// False untuk laporan tunggal yang belum didukung pengguna lain atau data kecepatan.
+  final bool verified;
+}
+
 class Report {
   const Report({
     required this.id,
@@ -302,6 +422,10 @@ class Report {
     required this.photoCount,
     required this.priority,
     this.fixedStatus,
+    this.call,
+    this.speedConfirmed = false,
+    this.interactions,
+    this.seconds,
   });
   final String id;
   final ReportCategory category;
@@ -313,6 +437,30 @@ class Report {
 
   /// Laporan lama punya status tetap; laporan baru maju sendiri seiring waktu.
   final ReportStatus? fixedStatus;
+
+  /// Terisi untuk laporan lewat suara.
+  final TrafficCall? call;
+
+  /// Laporan macet yang cocok dengan kecepatan kendaraan saat dilaporkan.
+  final bool speedConfirmed;
+
+  /// Jumlah ketukan atau ucapan dan lama waktu sampai laporan terkirim.
+  final int? interactions;
+  final int? seconds;
+
+  bool get byVoice => call != null;
+  String get title => call?.type.label ?? category.flatLabel;
+  IconData get icon => call?.type.icon ?? category.icon;
+
+  /// Detik sampai laporan suara tunggal didukung pengguna lain (simulasi).
+  static const _peerSeconds = 20;
+
+  /// Null jika belum terverifikasi; selain itu alasan laporan dipercaya.
+  String? trustAt(DateTime now) {
+    if (!byVoice) return 'Terverifikasi AI';
+    if (speedConfirmed) return 'Cocok dengan data kecepatan';
+    return now.difference(createdAt).inSeconds >= _peerSeconds ? 'Dikonfirmasi 3 pengguna' : null;
+  }
 
   static const _stepSeconds = [8, 18, 30];
 

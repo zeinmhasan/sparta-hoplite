@@ -15,7 +15,15 @@ abstract class HopliteRepository {
     required String description,
     required String location,
     required int photoCount,
+    int? interactions,
+    int? seconds,
   });
+
+  /// Menjalankan tool `report_traffic`: laporan suara ke Pulse.
+  Future<Report> reportTraffic(TrafficCall call);
+
+  /// Jawaban "masih macet?" untuk kejadian yang sudah diketahui Pulse.
+  Future<void> confirmEvent(RoadEvent event, {required bool stillThere});
   Future<List<AppNotification>> notifications();
 }
 
@@ -62,20 +70,49 @@ class MockRepository implements HopliteRepository {
     required String description,
     required String location,
     required int photoCount,
+    int? interactions,
+    int? seconds,
   }) async {
     await _latency(1200);
     final now = DateTime.now();
-    final serial = (now.millisecondsSinceEpoch ~/ 1000 % 9000 + 1000).toString();
     return Report(
-      id: 'SP-2610-$serial',
+      id: _reportId(now),
       category: category,
       description: description,
       location: location,
       createdAt: now,
       photoCount: photoCount,
       priority: category == ReportCategory.kecelakaan || category == ReportCategory.banjir ? 'Tinggi' : 'Sedang',
+      interactions: interactions,
+      seconds: seconds,
     );
   }
+
+  String _reportId(DateTime now) => 'SP-2610-${now.millisecondsSinceEpoch ~/ 1000 % 9000 + 1000}';
+
+  @override
+  Future<Report> reportTraffic(TrafficCall call) async {
+    await _latency(350);
+    final urgent = call.type != IncidentType.macet && call.type != IncidentType.lainnya;
+    return Report(
+      id: _reportId(call.timestamp),
+      category: call.type.category,
+      description: 'Laporan suara: ${call.type.label.toLowerCase()}, tingkat ${call.severity.label.toLowerCase()}.',
+      location: 'Jl. ${call.road}, Surabaya',
+      createdAt: call.timestamp,
+      photoCount: 0,
+      priority: urgent || call.severity == Severity.parah
+          ? 'Tinggi'
+          : (call.severity == Severity.sedang ? 'Sedang' : 'Rendah'),
+      call: call,
+      speedConfirmed: call.type == IncidentType.macet && call.crawling,
+      interactions: call.utterances,
+      seconds: call.seconds,
+    );
+  }
+
+  @override
+  Future<void> confirmEvent(RoadEvent event, {required bool stillThere}) => _latency(350);
 
   @override
   Future<List<AppNotification>> notifications() async {

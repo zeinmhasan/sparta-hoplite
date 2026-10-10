@@ -10,11 +10,12 @@ import 'package:maplibre_gl/maplibre_gl.dart' as ml;
 
 import '../../core/theme.dart';
 import '../../core/widgets.dart';
-import '../../data/models.dart';
 import '../../data/state.dart';
+import '../voice/voice_widgets.dart';
 import 'nav_models3d.dart';
 import 'nav_sim.dart';
 import 'nav_widgets.dart';
+import 'trip_session.dart';
 
 /// Gaya peta vektor OpenFreeMap: tanpa API key, dan punya data tinggi gedung.
 const _style = 'https://tiles.openfreemap.org/styles/liberty';
@@ -53,9 +54,7 @@ class _Navigation3dScreenState extends ConsumerState<Navigation3dScreen> with Si
   ml.MapLibreMapController? _map;
   Timer? _loadTimeout;
 
-  late final NavSimulator _sim;
-  late final VehicleMode _vehicle;
-  late final Horizon _horizon;
+  late final TripSession _trip;
   Duration _lastTick = Duration.zero;
 
   bool _ready = false;
@@ -78,10 +77,7 @@ class _Navigation3dScreenState extends ConsumerState<Navigation3dScreen> with Si
   @override
   void initState() {
     super.initState();
-    final routes = ref.read(tripRoutesProvider).value!;
-    _sim = NavSimulator(routes.firstWhere((r) => r.index == widget.routeIndex));
-    _vehicle = ref.read(vehicleModeProvider);
-    _horizon = ref.read(horizonProvider);
+    _trip = TripSession(ref, widget.routeIndex, onReroute: _onReroute);
     _loadTimeout = Timer(const Duration(seconds: 12), () {
       if (mounted && !_ready) setState(() => _slow = true);
     });
@@ -89,6 +85,7 @@ class _Navigation3dScreenState extends ConsumerState<Navigation3dScreen> with Si
 
   @override
   void dispose() {
+    _trip.close();
     _loadTimeout?.cancel();
     _ticker.dispose();
     _frame.dispose();
@@ -97,9 +94,9 @@ class _Navigation3dScreenState extends ConsumerState<Navigation3dScreen> with Si
 
   /// Garis rute dari [meters] sampai tujuan, satu fitur per ruas kepadatan.
   Map<String, dynamic> _routeLine(double meters) {
-    final route = _sim.route;
+    final route = _trip.route;
     return featureCollection([
-      for (final (level, points) in route.remainingSlices(_horizon, from: meters / route.sampler.totalMeters))
+      for (final (level, points) in route.remainingSlices(_trip.horizon, from: meters / route.sampler.totalMeters))
         {
           'type': 'Feature',
           'properties': {'color': _hex(level.color)},
@@ -232,8 +229,8 @@ class _Navigation3dScreenState extends ConsumerState<Navigation3dScreen> with Si
     final dt = math.min((elapsed - _lastTick).inMicroseconds / 1e6, 0.1);
     _lastTick = elapsed;
     final now = DateTime.now();
-    final frame = _sim.step(dt, now);
-    if (_sim.arrived) {
+    final frame = _trip.step(dt, now);
+    if (_trip.sim.arrived) {
       _ticker.stop();
       toast(context, 'Anda telah tiba di tujuan');
       return context.pop();
@@ -264,7 +261,7 @@ class _Navigation3dScreenState extends ConsumerState<Navigation3dScreen> with Si
     }
     map.setGeoJsonSource(
       'sparta-vehicle',
-      featureCollection(vehicleModel(_vehicle, frame.position, frame.bearing, scale)),
+      featureCollection(vehicleModel(_trip.vehicle, frame.position, frame.bearing, scale)),
     );
     // Garis yang sudah dilewati dibuang. Ujung potongannya tertutup kendaraan,
     // jadi cukup diperbarui tiap beberapa meter, bukan tiap frame.
@@ -277,7 +274,7 @@ class _Navigation3dScreenState extends ConsumerState<Navigation3dScreen> with Si
     if (second != _lightsSecond || (scale - _lightsScale).abs() > 0.05) {
       _lightsSecond = second;
       _lightsScale = scale;
-      final route = _sim.route;
+      final route = _trip.route;
       final total = route.sampler.totalMeters;
       map.setGeoJsonSource(
         'sparta-lights',
@@ -294,6 +291,13 @@ class _Navigation3dScreenState extends ConsumerState<Navigation3dScreen> with Si
       );
     }
     _frame.value = frame;
+  }
+
+  /// Rute berganti atas saran co-pilot: garis dan lampunya digambar ulang.
+  void _onReroute() {
+    _routeTrimmed = double.negativeInfinity;
+    _lightsSecond = -1;
+    if (mounted) setState(() {});
   }
 
   void _zoomBy(double delta) {
@@ -323,8 +327,8 @@ class _Navigation3dScreenState extends ConsumerState<Navigation3dScreen> with Si
 
   @override
   Widget build(BuildContext context) {
-    final route = _sim.route;
-    final minutes = route.minutes(_horizon, _vehicle);
+    final route = _trip.route;
+    final minutes = _trip.minutes;
     final now = ref.watch(nowProvider);
     final safe = MediaQuery.paddingOf(context);
 
@@ -370,6 +374,8 @@ class _Navigation3dScreenState extends ConsumerState<Navigation3dScreen> with Si
               bottom: 118 + safe.bottom,
               child: Column(
                 children: [
+                  VoiceToggleButton(copilot: _trip.copilot),
+                  const SizedBox(height: 10),
                   NavRoundButton(icon: Icons.add_rounded, onTap: () => _zoomBy(0.7)),
                   const SizedBox(height: 10),
                   NavRoundButton(icon: Icons.remove_rounded, onTap: () => _zoomBy(-0.7)),
@@ -378,7 +384,8 @@ class _Navigation3dScreenState extends ConsumerState<Navigation3dScreen> with Si
                   const SizedBox(height: 10),
                   NavRoundButton(
                     icon: Icons.traffic_rounded,
-                    onTap: () => showLightsSheet(context, route: route, minutes: minutes, metersNow: () => _sim.meters),
+                    onTap: () =>
+                        showLightsSheet(context, route: route, minutes: minutes, metersNow: () => _trip.sim.meters),
                   ),
                 ],
               ),
@@ -399,6 +406,12 @@ class _Navigation3dScreenState extends ConsumerState<Navigation3dScreen> with Si
               child: Center(child: RecenterButton(onTap: _recenter)),
             ),
           Positioned(
+            left: 14,
+            right: 74,
+            bottom: 188 + safe.bottom,
+            child: VoiceDock(copilot: _trip.copilot),
+          ),
+          Positioned(
             left: 0,
             right: 0,
             bottom: 0,
@@ -410,6 +423,7 @@ class _Navigation3dScreenState extends ConsumerState<Navigation3dScreen> with Si
                 meters: frame?.meters ?? 0,
                 now: now,
                 onClose: () => context.pop(),
+                trailing: MicButton(copilot: _trip.copilot, onTap: _trip.trip.userReport),
               ),
             ),
           ),

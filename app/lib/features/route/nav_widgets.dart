@@ -195,6 +195,7 @@ class NavBottomBar extends StatelessWidget {
     required this.meters,
     required this.now,
     required this.onClose,
+    this.trailing,
   });
 
   final RouteOption route;
@@ -202,6 +203,9 @@ class NavBottomBar extends StatelessWidget {
   final double meters;
   final DateTime now;
   final VoidCallback onClose;
+
+  /// Tombol di sisi kanan, berseberangan dengan tombol keluar.
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -250,7 +254,7 @@ class NavBottomBar extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(width: 50),
+              trailing ?? const SizedBox(width: 50),
             ],
           ),
         ),

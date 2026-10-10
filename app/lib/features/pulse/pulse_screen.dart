@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -8,7 +7,11 @@ import '../../core/widgets.dart';
 import '../../data/mock_data.dart' as mock;
 import '../../data/models.dart';
 import '../../data/state.dart';
+import '../voice/copilot.dart';
+import '../voice/voice_widgets.dart';
 
+/// Pulse Report versi suara: satu ketukan pada mikrofon, satu jawaban pendek,
+/// dan laporan terkirim. Selama navigasi, Hoplite yang bertanya duluan.
 class PulseScreen extends ConsumerStatefulWidget {
   const PulseScreen({super.key});
 
@@ -17,104 +20,58 @@ class PulseScreen extends ConsumerStatefulWidget {
 }
 
 class _PulseScreenState extends ConsumerState<PulseScreen> {
-  final _description = TextEditingController();
-  ReportCategory? _category;
-
-  /// Foto di demo adalah kotak contoh; tiap angka menunjuk satu warna contoh.
-  final _photos = <int>[];
-  int _photoSerial = 0;
-  String _location = mock.reportLocations.first;
-  bool _sending = false;
+  late final VoiceCopilot _copilot = ref.read(copilotProvider);
 
   @override
   void dispose() {
-    _description.dispose();
+    // Ditunda satu langkah: pendengar co-pilot tidak boleh dibangun ulang saat layar dibongkar.
+    Future.microtask(_copilot.cancel);
     super.dispose();
   }
 
-  Future<void> _addPhoto() async {
-    final source = await showModalBottomSheet<String>(
-      context: context,
-      useRootNavigator: true,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SheetHandle(),
-            ListTile(
-              leading: const Icon(Icons.photo_camera_outlined, color: AppColors.maroon),
-              title: const Text('Ambil foto', style: AppText.bodyStrong),
-              onTap: () => Navigator.of(context).pop('kamera'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.photo_library_outlined, color: AppColors.maroon),
-              title: const Text('Pilih dari galeri', style: AppText.bodyStrong),
-              onTap: () => Navigator.of(context).pop('galeri'),
-            ),
-            const SizedBox(height: 8),
-          ],
+  /// Lapor atas inisiatif pengguna. Lokasinya posisi pengguna saat ini.
+  Future<void> _report() async {
+    final repository = ref.read(repositoryProvider);
+    final reports = ref.read(reportsProvider.notifier);
+    await _copilot.run(() async {
+      final asked = DateTime.now();
+      final reply = await askWhatToReport(_copilot);
+      if (reply == null) return;
+      final now = DateTime.now();
+      final report = await repository.reportTraffic(
+        TrafficCall(
+          type: reply.value.type,
+          severity: reply.value.severity,
+          position: mock.origin.point,
+          heading: 0,
+          speedKmh: 0,
+          road: mock.originRoad,
+          timestamp: now,
+          utterances: reply.utterances,
+          seconds: now.difference(asked).inSeconds,
         ),
-      ),
-    );
-    if (source != null) setState(() => _photos.add(_photoSerial++));
-  }
-
-  Future<void> _editLocation() async {
-    final picked = await showModalBottomSheet<String>(
-      context: context,
-      useRootNavigator: true,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SheetHandle(),
-            for (final location in mock.reportLocations)
-              ListTile(
-                leading: const Icon(Icons.location_on_outlined, color: AppColors.maroon),
-                title: Text(location, style: AppText.bodyStrong),
-                trailing: location == _location ? const Icon(Icons.check_rounded, color: AppColors.maroon) : null,
-                onTap: () => Navigator.of(context).pop(location),
-              ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-    if (picked != null) setState(() => _location = picked);
-  }
-
-  Future<void> _submit() async {
-    if (_category == null) return toast(context, 'Pilih dulu jenis kejadian yang dilaporkan');
-    if (_photos.isEmpty) return toast(context, 'Tambahkan minimal satu foto');
-
-    setState(() => _sending = true);
-    final report = await ref
-        .read(repositoryProvider)
-        .submitReport(
-          category: _category!,
-          description: _description.text.trim().isEmpty ? 'Tanpa deskripsi.' : _description.text.trim(),
-          location: _location,
-          photoCount: _photos.length,
-        );
-    if (!mounted) return;
-    ref.read(reportsProvider.notifier).add(report);
-    setState(() {
-      _sending = false;
-      _category = null;
-      _photos.clear();
-      _description.clear();
+      );
+      reports.add(report);
+      await _copilot.say('Oke, dilaporkan.');
     });
-
-    final seeStatus = await showDialog<bool>(
-      context: context,
-      useRootNavigator: true,
-      builder: (context) => _SuccessDialog(report: report),
-    );
-    if (seeStatus == true && mounted) context.push('/reports/${report.id}');
   }
 
   @override
   Widget build(BuildContext context) {
+    final copilot = ref.watch(copilotProvider);
+    final reports = ref.watch(reportsProvider);
+    final now = ref.watch(nowProvider);
+    final lastVoice = reports.where((r) => r.byVoice).firstOrNull;
+
+    Widget toggle(String title, String subtitle, bool value, ValueChanged<bool>? onChanged) => SwitchListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+      activeTrackColor: AppColors.maroon,
+      title: Text(title, style: AppText.bodyStrong),
+      subtitle: Text(subtitle, style: AppText.caption),
+      value: value,
+      onChanged: onChanged,
+    );
+
     return SafeArea(
       bottom: false,
       child: Column(
@@ -134,126 +91,76 @@ class _PulseScreenState extends ConsumerState<PulseScreen> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
               children: [
-                const Text('Apa yang ingin Anda laporkan?', style: AppText.sectionTitle),
-                const SizedBox(height: 14),
-                GridView.count(
-                  crossAxisCount: 3,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 12,
-                  childAspectRatio: 1.02,
-                  children: [
-                    for (final category in ReportCategory.values)
-                      _CategoryTile(
-                        category: category,
-                        selected: category == _category,
-                        onTap: () => setState(() => _category = category),
-                      ),
-                  ],
+                const Text('Lapor tanpa menyentuh layar', style: AppText.sectionTitle),
+                const SizedBox(height: 6),
+                Text(
+                  'Ketuk mikrofon, lalu sebutkan kejadiannya. Lokasi, arah, dan waktu diisi otomatis.',
+                  style: AppText.body.copyWith(color: AppColors.textSecondary, height: 1.4),
                 ),
                 const SizedBox(height: 22),
+                Center(
+                  child: MicButton(copilot: copilot, onTap: _report, size: 128),
+                ),
+                const SizedBox(height: 14),
+                const Text(
+                  'Contoh: “macet parah”, “kecelakaan”, “banjir”, “jalan ditutup”',
+                  textAlign: TextAlign.center,
+                  style: AppText.caption,
+                ),
+                const SizedBox(height: 14),
+                VoiceDock(copilot: copilot),
+                const SizedBox(height: 8),
                 Row(
                   children: [
-                    Text('TAMBAH FOTO', style: AppText.overline),
-                    const Text(
-                      '*',
-                      style: TextStyle(color: AppColors.emergency, fontWeight: FontWeight.w700),
+                    const Icon(Icons.gps_fixed_rounded, size: 18, color: AppColors.maroon),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(mock.origin.address, style: AppText.body.copyWith(fontWeight: FontWeight.w500)),
                     ),
+                    const Text('Lokasi otomatis', style: AppText.caption),
                   ],
                 ),
+                if (lastVoice != null) ...[const SizedBox(height: 16), _LastReport(report: lastVoice, now: now)],
+                const SizedBox(height: 22),
+                const SectionLabel('Saat navigasi'),
                 const SizedBox(height: 10),
-                SizedBox(
-                  height: 96,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    clipBehavior: Clip.none,
+                AppCard(
+                  padding: EdgeInsets.zero,
+                  child: Column(
                     children: [
-                      for (final photo in _photos)
-                        _PhotoTile(
-                          key: ValueKey(photo),
-                          serial: photo,
-                          onRemove: () => setState(() => _photos.remove(photo)),
-                        ),
-                      _AddPhotoTile(onTap: _addPhoto),
+                      toggle(
+                        'Mode suara',
+                        'Hoplite berbicara dan mendengarkan selama navigasi',
+                        copilot.enabled,
+                        (value) => copilot.enabled = value,
+                      ),
+                      const Divider(indent: 16),
+                      toggle(
+                        'Hoplite bertanya duluan',
+                        'Saat laju turun jauh di bawah normal: “Di sini macet?”',
+                        copilot.enabled && copilot.proactive,
+                        copilot.enabled ? (value) => copilot.proactive = value : null,
+                      ),
+                      const Divider(indent: 16),
+                      toggle(
+                        'Siaran kondisi jalan',
+                        'Kejadian di rute depan dan tawaran rute alternatif',
+                        copilot.enabled && copilot.broadcast,
+                        copilot.enabled ? (value) => copilot.broadcast = value : null,
+                      ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 22),
-                const SectionLabel('Deskripsi singkat'),
+                const SectionLabel('Suara dibanding formulir'),
                 const SizedBox(height: 10),
-                TextField(
-                  controller: _description,
-                  maxLines: 3,
-                  maxLength: 160,
-                  style: AppText.body,
-                  decoration: InputDecoration(
-                    hintText: 'Contoh: tabrakan dua motor, satu lajur tertutup',
-                    hintStyle: AppText.body.copyWith(color: AppColors.textSecondary),
-                    filled: true,
-                    fillColor: Colors.white,
-                    contentPadding: const EdgeInsets.all(14),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: AppColors.border),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: AppColors.border),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                const SectionLabel('Lokasi (otomatis)'),
-                const SizedBox(height: 10),
-                Material(
-                  color: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    side: const BorderSide(color: AppColors.border),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: InkWell(
-                    onTap: _editLocation,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.gps_fixed_rounded, color: AppColors.maroon),
-                          const SizedBox(width: 12),
-                          Expanded(child: Text(_location, style: AppText.body.copyWith(fontSize: 15))),
-                          const Icon(Icons.edit_outlined, color: AppColors.textSecondary, size: 20),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Lokasi terdeteksi menggunakan GPS perangkat Anda secara real-time.',
-                  style: AppText.caption,
-                ),
-                const SizedBox(height: 22),
-                FilledButton(
-                  onPressed: _sending ? null : _submit,
-                  style: FilledButton.styleFrom(disabledBackgroundColor: AppColors.maroon.withValues(alpha: 0.6)),
-                  child: _sending
-                      ? const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white),
-                            ),
-                            SizedBox(width: 12),
-                            Text('Mengirim...', style: TextStyle(color: Colors.white)),
-                          ],
-                        )
-                      : const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [Text('Kirim Laporan'), SizedBox(width: 10), Icon(Icons.send_outlined, size: 20)],
-                        ),
+                _Comparison(reports: reports),
+                const SizedBox(height: 16),
+                OutlinedButton.icon(
+                  onPressed: () => context.push('/report-form'),
+                  icon: const Icon(Icons.add_a_photo_outlined, size: 20),
+                  label: const Text('Lapor dengan Foto'),
+                  style: OutlinedButton.styleFrom(backgroundColor: Colors.white),
                 ),
               ],
             ),
@@ -264,181 +171,84 @@ class _PulseScreenState extends ConsumerState<PulseScreen> {
   }
 }
 
-class _CategoryTile extends StatelessWidget {
-  const _CategoryTile({required this.category, required this.selected, required this.onTap});
-  final ReportCategory category;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
-      decoration: BoxDecoration(
-        color: selected ? AppColors.maroon.withValues(alpha: 0.06) : Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: selected ? AppColors.maroon : AppColors.border, width: selected ? 1.8 : 1),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(14),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(category.icon, color: AppColors.maroon, size: 30),
-              const SizedBox(height: 8),
-              Text(
-                category.label,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, height: 1.25, color: AppColors.text),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PhotoTile extends StatelessWidget {
-  const _PhotoTile({super.key, required this.serial, required this.onRemove});
-  final int serial;
-  final VoidCallback onRemove;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = mock.samplePhotoColors[serial % mock.samplePhotoColors.length];
-    return Container(
-      width: 96,
-      margin: const EdgeInsets.only(right: 12),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(colors: colors, begin: Alignment.topLeft, end: Alignment.bottomRight),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Stack(
-        children: [
-          const Center(child: Icon(Icons.image_outlined, color: Colors.white70, size: 30)),
-          Positioned(
-            left: 8,
-            bottom: 6,
-            child: Text('Foto ${serial + 1}', style: const TextStyle(fontSize: 10, color: Colors.white70)),
-          ),
-          Positioned(
-            right: 4,
-            top: 4,
-            child: GestureDetector(
-              onTap: onRemove,
-              child: Container(
-                padding: const EdgeInsets.all(3),
-                decoration: const BoxDecoration(color: Colors.black45, shape: BoxShape.circle),
-                child: const Icon(Icons.close_rounded, color: Colors.white, size: 14),
-              ),
-            ),
-          ),
-        ],
-      ),
-    ).animate().scaleXY(begin: 0.8, end: 1, duration: 200.ms, curve: Curves.easeOutBack).fadeIn();
-  }
-}
-
-class _AddPhotoTile extends StatelessWidget {
-  const _AddPhotoTile({required this.onTap});
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 96,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFCFC9C5), width: 1.5),
-        ),
-        child: const Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.add_a_photo_outlined, color: AppColors.maroon),
-            SizedBox(height: 6),
-            Text('Tambah', style: AppText.caption),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SuccessDialog extends StatelessWidget {
-  const _SuccessDialog({required this.report});
+/// Laporan suara terakhir, sebagai bukti di layar bahwa laporan sudah masuk.
+class _LastReport extends StatelessWidget {
+  const _LastReport({required this.report, required this.now});
   final Report report;
+  final DateTime now;
 
   @override
   Widget build(BuildContext context) {
-    Widget check(String text) => Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
+    final trust = report.trustAt(now);
+    return AppCard(
+      onTap: () => context.push('/reports/${report.id}'),
       child: Row(
         children: [
-          const Icon(Icons.verified_rounded, size: 16, color: AppColors.lancar),
-          const SizedBox(width: 8),
+          Icon(report.icon, color: AppColors.maroon),
+          const SizedBox(width: 12),
           Expanded(
-            child: Text(text, style: AppText.caption.copyWith(color: AppColors.text)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${report.title} • ${report.call!.severity.label.toLowerCase()}', style: AppText.bodyStrong),
+                const SizedBox(height: 3),
+                Text('${report.location} • ${trust ?? 'Belum terverifikasi'}', style: AppText.caption),
+              ],
+            ),
           ),
+          const Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary),
         ],
       ),
     );
+  }
+}
 
-    return Dialog(
-      backgroundColor: Colors.white,
-      surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+/// Rata-rata interaksi dan waktu per laporan, suara dibanding formulir.
+class _Comparison extends StatelessWidget {
+  const _Comparison({required this.reports});
+  final List<Report> reports;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget column(String title, IconData icon, String unit, bool voice) {
+      final measured = reports.where((r) => r.byVoice == voice && r.interactions != null).toList();
+      String average(int? Function(Report r) of) =>
+          (measured.fold(0, (sum, r) => sum + (of(r) ?? 0)) / measured.length).toStringAsFixed(1).replaceAll('.', ',');
+      return Expanded(
         child: Column(
-          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(color: AppColors.lancar.withValues(alpha: 0.12), shape: BoxShape.circle),
-              child: const Icon(Icons.check_rounded, color: AppColors.lancar, size: 40),
-            ).animate().scaleXY(begin: 0.4, end: 1, duration: 350.ms, curve: Curves.easeOutBack),
-            const SizedBox(height: 16),
-            const Text('Laporan terkirim', style: AppText.sectionTitle),
-            const SizedBox(height: 4),
-            Text('Nomor laporan ${report.id}', style: AppText.caption),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: AppColors.field, borderRadius: BorderRadius.circular(12)),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const AiBadge(label: 'Verifikasi AI'),
-                      const Spacer(),
-                      Text('Prioritas ${report.priority}', style: AppText.bodyStrong.copyWith(fontSize: 12)),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  check('Lokasi foto cocok dengan GPS'),
-                  check('Foto tidak terdeteksi duplikat'),
-                  check('Diteruskan ke operator SPARTA Ephor'),
-                ],
+            Row(
+              children: [
+                Icon(icon, size: 16, color: AppColors.maroon),
+                const SizedBox(width: 6),
+                Text(title, style: AppText.caption),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (measured.isEmpty)
+              const Text('Belum ada laporan', style: AppText.body)
+            else ...[
+              Text(
+                '${average((r) => r.interactions)} $unit',
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.text),
               ),
-            ),
-            const SizedBox(height: 18),
-            FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Lihat Status Laporan')),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Tutup', style: TextStyle(color: AppColors.textSecondary)),
-            ),
+              const SizedBox(height: 2),
+              Text('${average((r) => r.seconds)} detik • ${measured.length} laporan', style: AppText.caption),
+            ],
           ],
         ),
+      );
+    }
+
+    return AppCard(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          column('Lewat suara', Icons.mic_none_rounded, 'ucapan', true),
+          const SizedBox(width: 12),
+          column('Lewat formulir', Icons.touch_app_outlined, 'ketukan', false),
+        ],
       ),
     );
   }

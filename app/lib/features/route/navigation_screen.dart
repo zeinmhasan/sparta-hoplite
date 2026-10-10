@@ -12,8 +12,10 @@ import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../../data/models.dart';
 import '../../data/state.dart';
+import '../voice/voice_widgets.dart';
 import 'nav_sim.dart';
 import 'nav_widgets.dart';
+import 'trip_session.dart';
 
 const _zoom = 17.0;
 
@@ -47,7 +49,7 @@ class _NavigationScreenState extends ConsumerState<NavigationScreen> with Ticker
   /// 1 = miring penuh (3D), 0 = tegak lurus dari atas (2D).
   late final _tilt = AnimationController(vsync: this, duration: const Duration(milliseconds: 450), value: 1);
 
-  NavSimulator? _sim;
+  TripSession? _trip;
   Duration _lastTick = Duration.zero;
 
   /// False saat pengguna menggeser atau memutar peta sendiri.
@@ -59,13 +61,20 @@ class _NavigationScreenState extends ConsumerState<NavigationScreen> with Ticker
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final routes = ref.read(tripRoutesProvider).value;
       if (routes == null) return context.pop();
-      _sim = NavSimulator(routes.firstWhere((r) => r.index == widget.routeIndex));
+      // Saat rute berganti atas saran co-pilot, layar dibangun ulang dengan rute baru.
+      void rebuild() {
+        if (mounted) setState(() {});
+      }
+
+      _trip = TripSession(ref, widget.routeIndex, onReroute: rebuild);
+      rebuild();
       _ticker.start();
     });
   }
 
   @override
   void dispose() {
+    _trip?.close();
     _ticker.dispose();
     _tilt.dispose();
     _frame.dispose();
@@ -76,9 +85,9 @@ class _NavigationScreenState extends ConsumerState<NavigationScreen> with Ticker
   void _onTick(Duration elapsed) {
     final dt = math.min((elapsed - _lastTick).inMicroseconds / 1e6, 0.1);
     _lastTick = elapsed;
-    final sim = _sim!;
-    final frame = sim.step(dt, DateTime.now());
-    if (sim.arrived) {
+    final trip = _trip!;
+    final frame = trip.step(dt, DateTime.now());
+    if (trip.sim.arrived) {
       _ticker.stop();
       toast(context, 'Anda telah tiba di tujuan');
       return context.pop();
@@ -108,12 +117,8 @@ class _NavigationScreenState extends ConsumerState<NavigationScreen> with Ticker
         // Garis rute hanya digambar dari posisi kendaraan sampai tujuan.
         ValueListenableBuilder(
           valueListenable: _frame,
-          builder: (context, frame, _) => trafficLine(
-            route,
-            horizon,
-            width: 13,
-            from: (frame?.meters ?? 0) / route.sampler.totalMeters,
-          ),
+          builder: (context, frame, _) =>
+              trafficLine(route, horizon, width: 13, from: (frame?.meters ?? 0) / route.sampler.totalMeters),
         ),
         MarkerLayer(
           markers: [
@@ -159,7 +164,8 @@ class _NavigationScreenState extends ConsumerState<NavigationScreen> with Ticker
     final routes = ref.watch(tripRoutesProvider).value;
     if (routes == null) return const Scaffold(body: Center(child: CircularProgressIndicator()));
 
-    final route = routes.firstWhere((r) => r.index == widget.routeIndex);
+    final trip = _trip;
+    final route = trip?.route ?? routes.firstWhere((r) => r.index == widget.routeIndex);
     final horizon = ref.watch(horizonProvider);
     final minutes = route.minutes(horizon, ref.watch(vehicleModeProvider));
     final now = ref.watch(nowProvider);
@@ -229,6 +235,7 @@ class _NavigationScreenState extends ConsumerState<NavigationScreen> with Ticker
                 bottom: 118 + safe.bottom,
                 child: Column(
                   children: [
+                    if (trip != null) ...[VoiceToggleButton(copilot: trip.copilot), const SizedBox(height: 10)],
                     ListenableBuilder(
                       listenable: _tilt,
                       builder: (context, _) => NavRoundButton(
@@ -239,8 +246,12 @@ class _NavigationScreenState extends ConsumerState<NavigationScreen> with Ticker
                     const SizedBox(height: 10),
                     NavRoundButton(
                       icon: Icons.traffic_rounded,
-                      onTap: () =>
-                          showLightsSheet(context, route: route, minutes: minutes, metersNow: () => _sim?.meters ?? 0),
+                      onTap: () => showLightsSheet(
+                        context,
+                        route: route,
+                        minutes: minutes,
+                        metersNow: () => _trip?.sim.meters ?? 0,
+                      ),
                     ),
                   ],
                 ),
@@ -261,6 +272,13 @@ class _NavigationScreenState extends ConsumerState<NavigationScreen> with Ticker
                   bottom: 126 + safe.bottom,
                   child: Center(child: RecenterButton(onTap: () => setState(() => _following = true))),
                 ),
+              if (trip != null)
+                Positioned(
+                  left: 14,
+                  right: 74,
+                  bottom: 188 + safe.bottom,
+                  child: VoiceDock(copilot: trip.copilot),
+                ),
               Positioned(
                 left: 0,
                 right: 0,
@@ -273,6 +291,7 @@ class _NavigationScreenState extends ConsumerState<NavigationScreen> with Ticker
                     meters: frame?.meters ?? 0,
                     now: now,
                     onClose: () => context.pop(),
+                    trailing: trip == null ? null : MicButton(copilot: trip.copilot, onTap: trip.trip.userReport),
                   ),
                 ),
               ),

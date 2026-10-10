@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 
@@ -19,6 +21,9 @@ const origin = Place(
   point: LatLng(-7.2893, 112.8003),
   icon: Icons.my_location_rounded,
 );
+
+/// Nama jalan di posisi pengguna, untuk laporan suara di luar navigasi.
+const originRoad = 'Keputih';
 
 const places = [
   Place(
@@ -363,6 +368,8 @@ List<Report> seedReports(DateTime now) => [
     photoCount: 2,
     priority: 'Sedang',
     fixedStatus: ReportStatus.diproses,
+    interactions: 7,
+    seconds: 41,
   ),
   Report(
     id: 'SP-2610-0377',
@@ -373,8 +380,91 @@ List<Report> seedReports(DateTime now) => [
     photoCount: 1,
     priority: 'Tinggi',
     fixedStatus: ReportStatus.selesai,
+    interactions: 5,
+    seconds: 33,
   ),
 ];
+
+// ------------------------------------------------------------ Voice Co-Pilot
+
+/// Kejadian simulasi di satu perjalanan, pengganti data Pulse/Ephor.
+class TripScenario {
+  const TripScenario({required this.events, required this.quietJam});
+  final List<RoadEvent> events;
+
+  /// Kemacetan yang belum diketahui Pulse, bahan pertanyaan "Di sini macet?".
+  final SlowZone? quietJam;
+
+  /// Ruas tempat kendaraan merayap jika melewati rute [route].
+  List<SlowZone> slowZones(RouteOption route) {
+    final total = route.sampler.totalMeters;
+    return [
+      ?quietJam,
+      for (final e in events)
+        if (e.routeIndex == route.index && e.type == IncidentType.macet)
+          SlowZone(e.fraction * total - e.lengthMeters / 2, e.fraction * total + e.lengthMeters / 2, 0.25),
+    ];
+  }
+}
+
+/// Nama jalan di posisi [meters] pada rute, dibaca dari simpang yang mengapitnya.
+String roadAt(RouteOption route, double meters) {
+  final total = route.sampler.totalMeters;
+  final passed = route.intersections.where((x) => x.fraction * total <= meters);
+  if (passed.isNotEmpty) return passed.last.roads.last;
+  return route.intersections.isEmpty
+      ? route.via.split(' & ').first.replaceFirst('Jl. ', '')
+      : route.intersections.first.roads.first;
+}
+
+/// Skenario untuk perjalanan yang dimulai di rute [start]:
+/// 1. kemacetan tak terlapor tak jauh dari titik berangkat,
+/// 2. kemacetan yang sudah diketahui Pulse di ruas terpadat setelah rute lain
+///    berpisah, sehingga ada rute alternatif yang menghindarinya,
+/// 3. genangan menjelang tujuan di tiap rute, dan
+/// 4. satu kejadian di luar rute, yang tidak boleh ikut disiarkan.
+TripScenario tripScenario(List<RouteOption> routes, RouteOption start, Horizon horizon) {
+  final total = start.sampler.totalMeters;
+  var split = 0.0;
+  for (final other in routes) {
+    if (other.index != start.index) split = math.max(split, start.sampler.sharedPrefixMeters(other.sampler));
+  }
+
+  final earliest = (split + 500) / total;
+  final levels = start.segments(horizon);
+  var worst = -1;
+  for (var i = 0; i < levels.length; i++) {
+    final center = (i + 0.5) / levels.length;
+    if (center < earliest || center > 0.85) continue;
+    if (worst < 0 || levels[i].index > levels[worst].index) worst = i;
+  }
+  final jamAt = worst < 0 ? earliest.clamp(0.3, 0.85).toDouble() : (worst + 0.5) / levels.length;
+
+  return TripScenario(
+    quietJam: total > 1500 ? const SlowZone(200, 450, 0.22) : null,
+    events: [
+      RoadEvent(
+        id: 'macet-${start.index}',
+        type: IncidentType.macet,
+        road: roadAt(start, jamAt * total),
+        routeIndex: start.index,
+        fraction: jamAt,
+        lengthMeters: 300,
+        delayMinutes: 10,
+      ),
+      for (final route in routes) _puddle(route, route.index == start.index ? math.min(jamAt + 0.2, 0.93) : 0.7),
+      const RoadEvent(id: 'luar-rute', type: IncidentType.kecelakaan, road: 'Mayjend Sungkono'),
+    ],
+  );
+}
+
+RoadEvent _puddle(RouteOption route, double fraction) => RoadEvent(
+  id: 'genangan-${route.index}',
+  type: IncidentType.banjir,
+  road: roadAt(route, fraction * route.sampler.totalMeters),
+  routeIndex: route.index,
+  fraction: fraction,
+);
 
 // -------------------------------------------------------------- Panic Button
 

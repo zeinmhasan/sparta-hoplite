@@ -1,5 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Mendengarkan jawaban suara co-pilot. Rekaman tidak disimpan. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <application
         android:label="SPARTA Hoplite"
         android:name="${applicationName}"
@@ -41,6 +43,13 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- Pengenal suara dan mesin TTS bawaan perangkat, dipakai co-pilot suara. -->
+        <intent>
+            <action android:name="android.speech.RecognitionService"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE"/>
         </intent>
     </queries>
 </manifest>

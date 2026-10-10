@@ -9,6 +9,7 @@ import '../features/panic/panic_screen.dart';
 import '../features/profile/profile_screen.dart';
 import '../features/pulse/my_reports_screen.dart';
 import '../features/pulse/pulse_screen.dart';
+import '../features/pulse/report_form_screen.dart';
 import '../features/route/navigation_3d_screen.dart';
 import '../features/route/navigation_screen.dart';
 import '../features/route/route_detail_screen.dart';
@@ -67,6 +68,7 @@ final router = GoRouter(
     GoRoute(path: '/assistant', builder: (context, state) => const AssistantScreen()),
     GoRoute(path: '/insights', builder: (context, state) => const InsightsScreen()),
     GoRoute(path: '/notifications', builder: (context, state) => const NotificationsScreen()),
+    GoRoute(path: '/report-form', builder: (context, state) => const ReportFormScreen()),
     GoRoute(path: '/reports', builder: (context, state) => const MyReportsScreen()),
     GoRoute(
       path: '/reports/:id',

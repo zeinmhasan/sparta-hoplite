@@ -22,6 +22,7 @@ class NavFrame {
     required this.position,
     required this.bearing,
     required this.waiting,
+    this.yielding = false,
   });
   final double meters;
   final double speed;
@@ -32,6 +33,9 @@ class NavFrame {
 
   /// Sedang berhenti menunggu lampu merah.
   final bool waiting;
+
+  /// Melambat atau berhenti karena lampu merah di depan, bukan karena macet.
+  final bool yielding;
 
   int get kmh => (speed / cruiseSpeed * cruiseKmh).round();
 }
@@ -88,9 +92,12 @@ String lightAdvice(RouteOption route, NavFrame frame, DateTime now) {
 /// simpang berikutnya: melambat agar tiba saat hijau, dan berhenti di garis
 /// henti jika lampu masih merah.
 class NavSimulator {
-  NavSimulator(this.route) : _bearing = route.sampler.bearingAt(0);
+  NavSimulator(this.route, {this.slowZones = const []}) : _bearing = route.sampler.bearingAt(0);
 
-  final RouteOption route;
+  RouteOption route;
+
+  /// Ruas macet simulasi: kendaraan merayap selama berada di dalamnya.
+  List<SlowZone> slowZones;
   double _meters = 0;
   double _speed = 0;
   double _bearing;
@@ -98,19 +105,32 @@ class NavSimulator {
   double get meters => _meters;
   bool get arrived => _meters >= route.sampler.totalMeters - 1;
 
+  /// Pindah ke [next] di posisi yang sama. Hanya benar selama kendaraan masih
+  /// di ruas awal yang dilalui kedua rute.
+  void switchRoute(RouteOption next, {List<SlowZone> slowZones = const []}) {
+    route = next;
+    this.slowZones = slowZones;
+  }
+
   /// Maju [dt] detik dan mengembalikan keadaan kendaraan sesudahnya.
   NavFrame step(double dt, DateTime now) {
     final total = route.sampler.totalMeters;
     final next = nextIntersection(route, _meters);
 
     var target = cruiseSpeed;
+    for (final zone in slowZones) {
+      if (_meters >= zone.from && _meters < zone.to) target = cruiseSpeed * zone.factor;
+    }
     var limit = total;
+    var yielding = false;
     if (next != null) {
       final light = next.stateAt(now);
       final distance = next.fraction * total - _meters;
       if (!light.green) {
         if (distance / cruiseSpeed < light.remaining) {
-          target = (distance / light.remaining).clamp(_slowest, cruiseSpeed).toDouble();
+          final paced = (distance / light.remaining).clamp(_slowest, cruiseSpeed).toDouble();
+          yielding = paced < target;
+          target = math.min(target, paced);
         }
         limit = next.fraction * total - _stopGap;
       }
@@ -124,6 +144,13 @@ class NavSimulator {
     final t = _meters / total;
     final turn = (route.sampler.bearingAt(t) - _bearing + 540) % 360 - 180;
     _bearing = (_bearing + turn * math.min(1, dt * 4)) % 360;
-    return NavFrame(meters: _meters, speed: _speed, position: route.sampler.at(t), bearing: _bearing, waiting: waiting);
+    return NavFrame(
+      meters: _meters,
+      speed: _speed,
+      position: route.sampler.at(t),
+      bearing: _bearing,
+      waiting: waiting,
+      yielding: yielding || waiting,
+    );
   }
 }

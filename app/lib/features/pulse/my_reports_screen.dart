@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -72,14 +74,14 @@ class MyReportsScreen extends ConsumerWidget {
                             color: AppColors.maroon.withValues(alpha: 0.08),
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: Icon(report.category.icon, color: AppColors.maroon),
+                          child: Icon(report.icon, color: AppColors.maroon),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(report.category.flatLabel, style: AppText.cardTitle.copyWith(fontSize: 15)),
+                              Text(report.title, style: AppText.cardTitle.copyWith(fontSize: 15)),
                               const SizedBox(height: 3),
                               Text(report.location, style: AppText.caption),
                               const SizedBox(height: 3),
@@ -110,6 +112,8 @@ class ReportDetailScreen extends ConsumerWidget {
     final report = ref.watch(reportsProvider).firstWhere((r) => r.id == reportId);
     final now = ref.watch(nowProvider);
     final status = report.statusAt(now);
+    final call = report.call;
+    final trust = report.trustAt(now);
 
     return Scaffold(
       body: SafeArea(
@@ -126,9 +130,9 @@ class ReportDetailScreen extends ConsumerWidget {
                       children: [
                         Row(
                           children: [
-                            Icon(report.category.icon, color: AppColors.maroon),
+                            Icon(report.icon, color: AppColors.maroon),
                             const SizedBox(width: 10),
-                            Expanded(child: Text(report.category.flatLabel, style: AppText.cardTitle)),
+                            Expanded(child: Text(report.title, style: AppText.cardTitle)),
                             _StatusChip(status),
                           ],
                         ),
@@ -137,26 +141,60 @@ class ReportDetailScreen extends ConsumerWidget {
                         const Divider(height: 28),
                         _InfoRow(icon: Icons.tag_rounded, text: report.id),
                         _InfoRow(icon: Icons.location_on_outlined, text: report.location),
-                        _InfoRow(
-                          icon: Icons.photo_library_outlined,
-                          text: '${report.photoCount} foto • ${_timeAgo(report.createdAt, now)}',
-                        ),
+                        if (call == null)
+                          _InfoRow(
+                            icon: Icons.photo_library_outlined,
+                            text: '${report.photoCount} foto • ${_timeAgo(report.createdAt, now)}',
+                          )
+                        else
+                          _InfoRow(
+                            icon: Icons.mic_none_rounded,
+                            text:
+                                'Lewat suara • ${call.utterances} ucapan • ${call.seconds} dtk • '
+                                '${_timeAgo(report.createdAt, now)}',
+                          ),
                         const SizedBox(height: 10),
                         Row(
                           children: [
                             AiBadge(label: 'Prioritas ${report.priority}'),
                             const SizedBox(width: 8),
-                            const Icon(Icons.verified_rounded, size: 16, color: AppColors.lancar),
+                            Icon(
+                              trust == null ? Icons.hourglass_top_rounded : Icons.verified_rounded,
+                              size: 16,
+                              color: trust == null ? AppColors.textSecondary : AppColors.lancar,
+                            ),
                             const SizedBox(width: 4),
-                            const Text(
-                              'Terverifikasi AI',
-                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.lancar),
+                            Text(
+                              trust ?? 'Belum terverifikasi',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: trust == null ? AppColors.textSecondary : AppColors.lancar,
+                              ),
                             ),
                           ],
                         ),
                       ],
                     ),
                   ),
+                  if (call != null) ...[
+                    const SizedBox(height: 22),
+                    const SectionLabel('Tool call ke Pulse'),
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(color: AppColors.field, borderRadius: BorderRadius.circular(12)),
+                      child: Text(
+                        const JsonEncoder.withIndent('  ').convert(call.toJson()),
+                        style: const TextStyle(fontFamily: 'monospace', fontSize: 11.5, height: 1.45),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Jenis dan tingkat keparahan dari jawaban Anda. Sisanya diisi otomatis dari posisi kendaraan.',
+                      style: AppText.caption,
+                    ),
+                  ],
                   const SizedBox(height: 22),
                   const SectionLabel(
                     'Perjalanan laporan',

@@ -19,6 +19,8 @@ dependencies:
   flutter_animate: ^4.5.2
   http: ^1.6.0
   maplibre_gl: ^0.27.1
+  flutter_tts: ^4.2.5
+  speech_to_text: ^7.4.0
 
 dev_dependencies:
   flutter_test:

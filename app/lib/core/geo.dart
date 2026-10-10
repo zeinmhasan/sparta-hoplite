@@ -57,4 +57,14 @@ class PathSampler {
     final end = _segmentAt(to.clamp(0.0, 1.0) * totalMeters);
     return [at(from), ...points.sublist(start + 1, end + 1), at(to)];
   }
+
+  /// Panjang ruas awal (meter) yang sama persis dengan garis [other]: jarak
+  /// dari titik berangkat sampai kedua rute berpisah.
+  double sharedPrefixMeters(PathSampler other) {
+    var i = 0;
+    while (i + 1 < points.length && i + 1 < other.points.length && _meters(points[i + 1], other.points[i + 1]) < 3) {
+      i++;
+    }
+    return _cum[i];
+  }
 }

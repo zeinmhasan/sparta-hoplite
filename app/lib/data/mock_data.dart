@@ -368,8 +368,6 @@ List<Report> seedReports(DateTime now) => [
     photoCount: 2,
     priority: 'Sedang',
     fixedStatus: ReportStatus.diproses,
-    interactions: 7,
-    seconds: 41,
   ),
   Report(
     id: 'SP-2610-0377',
@@ -380,8 +378,6 @@ List<Report> seedReports(DateTime now) => [
     photoCount: 1,
     priority: 'Tinggi',
     fixedStatus: ReportStatus.selesai,
-    interactions: 5,
-    seconds: 33,
   ),
 ];
 
@@ -519,6 +515,23 @@ const notifications = [
     unread: true,
   ),
   AppNotification(
+    icon: Icons.flood_rounded,
+    color: AppColors.navy,
+    title: 'Warga melaporkan banjir di Jl. Kertajaya Indah',
+    body: '27 warga mengonfirmasi genangan setinggi lutut. Ketuk untuk melihat foto dan penanganannya.',
+    time: '18 menit lalu',
+    route: '/community/w-1039',
+    unread: true,
+  ),
+  AppNotification(
+    icon: Icons.account_balance_wallet_rounded,
+    color: AppColors.lancar,
+    title: 'Saldo Pulse bertambah Rp2.500',
+    body: 'Laporan kerusakan jalan di Jl. Kertajaya terverifikasi. Tukar saldo dengan tiket Suroboyo Bus.',
+    time: '3 jam lalu',
+    route: '/rewards',
+  ),
+  AppNotification(
     icon: Icons.directions_bus_rounded,
     color: AppColors.teal,
     title: 'Bus R2 mendekati Halte ITS',
@@ -551,3 +564,286 @@ const notifications = [
     time: 'Kemarin',
   ),
 ];
+
+// ------------------------------------------------------------ Laporan warga
+
+/// Instansi yang menerima laporan menurut jenisnya.
+String handlerFor(IncidentType type) => switch (type) {
+  IncidentType.macet || IncidentType.jalanDitutup => 'Dishub Surabaya',
+  IncidentType.banjir => 'DSDABM Surabaya',
+  IncidentType.kecelakaan || IncidentType.lainnya => 'Command Center 112',
+};
+
+/// Laporan warga lain di sekitar Surabaya timur, waktunya relatif terhadap [now].
+List<CitizenReport> citizenReports(DateTime now) {
+  DateTime ago(int minutes) => now.subtract(Duration(minutes: minutes));
+  FollowUp step(String title, String detail, int minutesAgo) => FollowUp(title, detail, ago(minutesAgo));
+  return [
+    CitizenReport(
+      id: 'w-1042',
+      type: IncidentType.kecelakaan,
+      severity: Severity.sedang,
+      road: 'Jl. Raya Menur',
+      area: 'Gubeng',
+      point: const LatLng(-7.2836, 112.7662),
+      createdAt: ago(7),
+      reporter: 'Dimas A.',
+      reporterLevel: 'Garda Kota',
+      photo: 'assets/images/reports/kecelakaan.jpg',
+      note: 'Ada tabrakan dua mobil di perempatan, lajur kanan ketutup',
+      stillThere: 14,
+      cleared: 1,
+      status: CitizenStatus.ditangani,
+      handler: 'Command Center 112',
+      followUps: [
+        step('Diterima SPARTA Pulse', 'Diklasifikasi AI sebagai kecelakaan, tingkat sedang', 7),
+        step('Diteruskan ke Command Center 112', 'Prioritas tinggi karena menutup lajur', 6),
+        step('Petugas di lokasi', 'Polantas dan Dishub mengatur arus di perempatan', 2),
+      ],
+    ),
+    CitizenReport(
+      id: 'w-1039',
+      type: IncidentType.banjir,
+      severity: Severity.parah,
+      road: 'Jl. Kertajaya Indah',
+      area: 'Mulyorejo',
+      point: const LatLng(-7.2794, 112.7781),
+      createdAt: ago(19),
+      reporter: 'Siti N.',
+      reporterLevel: 'Pengawas Jalan',
+      photo: 'assets/images/reports/banjir.jpg',
+      note: 'Banjir parah, setinggi lutut, motor banyak yang mogok',
+      stillThere: 27,
+      cleared: 3,
+      status: CitizenStatus.ditangani,
+      handler: 'DSDABM Surabaya',
+      followUps: [
+        step('Diterima SPARTA Pulse', 'Diklasifikasi AI sebagai banjir, tingkat parah', 19),
+        step('Diteruskan ke DSDABM Surabaya', 'Dinas Sumber Daya Air dan Bina Marga', 17),
+        step('Rumah pompa dioperasikan', 'Pompa air menyala, genangan diperkirakan surut 40 menit', 8),
+      ],
+    ),
+    CitizenReport(
+      id: 'w-1036',
+      type: IncidentType.macet,
+      severity: Severity.parah,
+      road: 'Jl. Ir. H. Soekarno (MERR)',
+      area: 'Sukolilo',
+      point: const LatLng(-7.2967, 112.7834),
+      createdAt: ago(33),
+      reporter: 'Bagus P.',
+      reporterLevel: 'Pengawas Jalan',
+      photo: 'assets/images/reports/macet.jpg',
+      note: 'Macet total arah Kenjeran, hampir nggak gerak',
+      stillThere: 31,
+      cleared: 4,
+      status: CitizenStatus.terverifikasi,
+      handler: 'Dishub Surabaya',
+      followUps: [
+        step('Diterima SPARTA Pulse', 'Cocok dengan data kecepatan kendaraan di ruas ini', 33),
+        step('Lampu ATCS disesuaikan', 'Fase hijau arah Kenjeran diperpanjang 20 detik', 25),
+      ],
+    ),
+    CitizenReport(
+      id: 'w-1033',
+      type: IncidentType.lainnya,
+      severity: Severity.sedang,
+      road: 'Jl. Pemuda',
+      area: 'Genteng',
+      point: const LatLng(-7.2648, 112.7463),
+      createdAt: ago(48),
+      reporter: 'Rina K.',
+      reporterLevel: 'Warga Peduli',
+      photo: 'assets/images/reports/kerumunan.jpg',
+      note: 'Kerumunan massa, separuh jalan tertutup',
+      stillThere: 2,
+      cleared: 0,
+      status: CitizenStatus.menunggu,
+      handler: 'Command Center 112',
+      followUps: [step('Diterima SPARTA Pulse', 'Menunggu konfirmasi warga sekitar', 48)],
+    ),
+    CitizenReport(
+      id: 'w-1027',
+      type: IncidentType.jalanDitutup,
+      severity: Severity.parah,
+      road: 'Jl. Arief Rahman Hakim',
+      area: 'Sukolilo',
+      point: const LatLng(-7.2889, 112.7874),
+      createdAt: ago(95),
+      reporter: 'Hendra W.',
+      reporterLevel: 'Garda Kota',
+      photo: 'assets/images/reports/ambles.jpg',
+      note: 'Jalan ambles, satu lajur ditutup pakai pembatas',
+      stillThere: 19,
+      cleared: 0,
+      status: CitizenStatus.ditangani,
+      handler: 'DSDABM Surabaya',
+      followUps: [
+        step('Diterima SPARTA Pulse', 'Diklasifikasi AI sebagai jalan ditutup, tingkat parah', 95),
+        step('Diteruskan ke DSDABM Surabaya', 'Tim perbaikan jalan dijadwalkan', 80),
+        step('Pengalihan arus', 'Dishub memasang rambu pengalihan ke Jl. Klampis Jaya', 60),
+      ],
+    ),
+    CitizenReport(
+      id: 'w-1018',
+      type: IncidentType.lainnya,
+      severity: Severity.ringan,
+      road: 'Jl. Raya Darmo',
+      area: 'Wonokromo',
+      point: const LatLng(-7.2905, 112.7372),
+      createdAt: ago(260),
+      reporter: 'Ayu L.',
+      reporterLevel: 'Pengawas Jalan',
+      photo: 'assets/images/reports/pohon.jpg',
+      note: 'Pohon tumbang di trotoar, sebagian ke badan jalan',
+      stillThere: 9,
+      cleared: 12,
+      status: CitizenStatus.selesai,
+      handler: 'DLH Surabaya',
+      followUps: [
+        step('Diterima SPARTA Pulse', 'Diklasifikasi AI sebagai gangguan, tingkat ringan', 260),
+        step('Diteruskan ke DLH Surabaya', 'Dinas Lingkungan Hidup, satgas pohon', 245),
+        step('Selesai', 'Pohon sudah dipotong dan diangkut', 150),
+      ],
+    ),
+  ];
+}
+
+// -------------------------------------------------------------- Saldo Pulse
+
+/// Laporan terverifikasi pengguna sebelum sesi ini, untuk jenjang pelapor.
+const seedVerifiedReports = 12;
+
+/// Layanan Pemkot Surabaya yang bisa dibayar dengan saldo. Harga mengikuti
+/// tarif umum: Suroboyo Bus dan Wira Wiri Rp5.000, KBS Rp15.000, Museum
+/// Sepuluh Nopember Rp8.000, THP Kenjeran Rp10.000, SSCT Rp10.000.
+const rewardCatalog = [
+  RewardItem(
+    id: 'suroboyo-bus',
+    name: 'Suroboyo Bus',
+    operator: 'Dishub Kota Surabaya',
+    category: 'Transportasi',
+    price: 5000,
+    unit: '1 perjalanan, semua koridor',
+    icon: Icons.directions_bus_rounded,
+    color: Color(0xFFD32F2F),
+    howTo: 'Pindai QR di validator pintu bus, atau tunjukkan ke pramudi.',
+    validFor: Duration(hours: 24),
+  ),
+  RewardItem(
+    id: 'wira-wiri',
+    name: 'Wira Wiri Suroboyo',
+    operator: 'Feeder Dishub Kota Surabaya',
+    category: 'Transportasi',
+    price: 5000,
+    unit: '1 perjalanan, 11 rute feeder',
+    icon: Icons.airport_shuttle_rounded,
+    color: Color(0xFF00897B),
+    howTo: 'Pindai QR di validator feeder saat naik.',
+    validFor: Duration(hours: 24),
+  ),
+  RewardItem(
+    id: 'ssct',
+    name: 'Bus SSCT',
+    operator: 'Surabaya Sightseeing & City Tour',
+    category: 'Transportasi',
+    price: 10000,
+    unit: '1 kursi tur keliling kota',
+    icon: Icons.tour_rounded,
+    color: Color(0xFF1565C0),
+    howTo: 'Tunjukkan QR di Tourism Information Center Balai Pemuda sebelum berangkat.',
+    validFor: Duration(days: 30),
+  ),
+  RewardItem(
+    id: 'parkir',
+    name: 'Parkir Tepi Jalan',
+    operator: 'Dishub Kota Surabaya',
+    category: 'Transportasi',
+    price: 5000,
+    unit: 'Potongan Rp5.000 di titik e-parking',
+    icon: Icons.local_parking_rounded,
+    color: Color(0xFF5E35B1),
+    howTo: 'Tunjukkan QR ke juru parkir resmi saat membayar.',
+    validFor: Duration(days: 7),
+  ),
+  RewardItem(
+    id: 'kbs',
+    name: 'Kebun Binatang Surabaya',
+    operator: 'PD Taman Satwa KBS',
+    category: 'Wisata kota',
+    price: 15000,
+    unit: '1 tiket masuk',
+    icon: Icons.pets_rounded,
+    color: Color(0xFF2E7D32),
+    howTo: 'Tukarkan QR di loket KBS, buka pukul 08.00 sampai 16.00.',
+    validFor: Duration(days: 30),
+  ),
+  RewardItem(
+    id: 'museum-10-nopember',
+    name: 'Museum Sepuluh Nopember',
+    operator: 'Kawasan Tugu Pahlawan',
+    category: 'Wisata kota',
+    price: 8000,
+    unit: '1 tiket masuk museum',
+    icon: Icons.account_balance_rounded,
+    color: Color(0xFF8E1616),
+    howTo: 'Tunjukkan QR di loket museum.',
+    validFor: Duration(days: 30),
+  ),
+  RewardItem(
+    id: 'thp-kenjeran',
+    name: 'Taman Hiburan Pantai Kenjeran',
+    operator: 'Pemerintah Kota Surabaya',
+    category: 'Wisata kota',
+    price: 10000,
+    unit: '1 tiket masuk',
+    icon: Icons.beach_access_rounded,
+    color: Color(0xFFEF6C00),
+    howTo: 'Tunjukkan QR di gerbang masuk THP Kenjeran.',
+    validFor: Duration(days: 30),
+  ),
+];
+
+/// Riwayat saldo sebelum sesi ini.
+List<WalletEntry> seedWallet(DateTime now) {
+  DateTime ago(int hours) => now.subtract(Duration(hours: hours));
+  return [
+    WalletEntry(
+      title: 'Laporan kerusakan jalan terverifikasi',
+      detail: 'Jl. Kertajaya, Surabaya',
+      amount: rewardPerReport,
+      time: ago(3),
+    ),
+    WalletEntry(
+      title: 'Konfirmasi laporan warga',
+      detail: 'Macet • Jl. Ahmad Yani',
+      amount: rewardPerConfirmation,
+      time: ago(20),
+    ),
+    WalletEntry(
+      title: 'Laporan pohon tumbang terverifikasi',
+      detail: 'Jl. Raya Darmo, Surabaya',
+      amount: rewardPerReport,
+      time: ago(26),
+    ),
+    WalletEntry(title: 'Tiket Suroboyo Bus', detail: 'Koridor R2 • Halte ITS', amount: -5000, time: ago(50)),
+    WalletEntry(
+      title: 'Bonus pelapor aktif',
+      detail: '5 laporan terverifikasi dalam seminggu',
+      amount: 10000,
+      time: ago(74),
+    ),
+    WalletEntry(
+      title: 'Laporan banjir terverifikasi',
+      detail: 'Jl. Dharmahusada, Surabaya',
+      amount: rewardPerReport,
+      time: ago(98),
+    ),
+    WalletEntry(
+      title: 'Laporan macet terverifikasi',
+      detail: 'Jl. Raya ITS, Surabaya',
+      amount: rewardPerReport,
+      time: ago(120),
+    ),
+  ];
+}

@@ -63,9 +63,13 @@ class DeviceVoiceEngine implements VoiceEngine {
 
   String _heard = '';
 
-  void _finish() {
+  /// Mengakhiri pendengaran. Jika pengenal berhenti sendiri sebelum ada ucapan
+  /// (diam, atau galat pengenal), jawaban ditunggu sampai batas waktu supaya
+  /// pilihan di layar masih sempat diketuk; [force] mengakhirinya saat itu juga.
+  void _finish({bool force = false}) {
     final hearing = _hearing;
-    if (hearing != null && !hearing.isCompleted) hearing.complete(_heard.isEmpty ? null : _heard);
+    if (hearing == null || hearing.isCompleted || (_heard.isEmpty && !force)) return;
+    hearing.complete(_heard.isEmpty ? null : _heard);
   }
 
   @override
@@ -91,7 +95,7 @@ class DeviceVoiceEngine implements VoiceEngine {
     final hearing = _hearing = Completer<String?>();
     _heard = '';
     // Batas waktu juga berlaku tanpa pengenal suara, supaya pertanyaan tidak menggantung.
-    final guard = Timer(timeout + const Duration(seconds: 1), _finish);
+    final guard = Timer(timeout + const Duration(seconds: 1), () => _finish(force: true));
     if (_canListen) {
       try {
         await _stt.listen(
@@ -109,7 +113,7 @@ class DeviceVoiceEngine implements VoiceEngine {
           ),
         );
       } catch (_) {
-        _finish();
+        // Pengenal gagal dimulai; pilihan di layar tetap bisa diketuk sampai batas waktu.
       }
     }
     final heard = await hearing.future;
@@ -121,7 +125,7 @@ class DeviceVoiceEngine implements VoiceEngine {
   @override
   Future<void> stop() async {
     _heard = '';
-    _finish();
+    _finish(force: true);
     final muted = _muted;
     if (muted != null && !muted.isCompleted) muted.complete();
     try {

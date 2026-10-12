@@ -267,4 +267,30 @@ void main() {
     expect(spokenDistance(1040), '1 kilometer');
     expect(spokenDistance(1500), '1,5 kilometer');
   });
+
+  test('laporan Pulse membawa ucapan, keyakinan AI, dan foto bukti', () async {
+    final reply = await askWhatToReport(VoiceCopilot(FakeEngine(['ada kecelakaan motor parah'])));
+    expect(reply!.heard, 'ada kecelakaan motor parah');
+    expect(reply.value.type, IncidentType.kecelakaan);
+    expect(reply.value.severity, Severity.parah);
+
+    final confidence = classifierConfidence(reply.heard, reply.value);
+    expect(confidence, inInclusiveRange(0.86, 0.98));
+    expect(classifierConfidence(reply.heard, reply.value), confidence, reason: 'tetap untuk ucapan yang sama');
+
+    final json = TrafficCall(
+      type: reply.value.type,
+      severity: reply.value.severity,
+      position: mock.origin.point,
+      heading: 0,
+      speedKmh: 0,
+      road: 'Keputih',
+      timestamp: DateTime(2026, 10, 12, 9),
+      transcript: reply.heard,
+      confidence: confidence,
+      photoPath: '/data/user/0/cache/CAP123.jpg',
+    ).toJson();
+    expect(json['evidence'], {'photo': 'CAP123.jpg'});
+    expect((json['classifier'] as Map)['transcript'], 'ada kecelakaan motor parah');
+  });
 }

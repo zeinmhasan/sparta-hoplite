@@ -40,7 +40,7 @@ Pasang ulang memutus sesi `flutter run` milik pengguna; beri tahu mereka agar me
 `flutter run -d emulator-5554` lagi. `adb shell input tap` hanya satu jari, jadi gestur cubit, putar,
 dan miring dua jari tidak bisa diuji otomatis.
 
-## Status per 2026-10-10
+## Status per 2026-10-12
 
 Semua layar sudah jadi dan disetujui pengguna sampai revisi navigasi 3D (kendaraan mobil/motor 3D,
 tiang lampu 3D, gedung 3D transparan saat diperbesar, tombol zoom).
@@ -53,16 +53,44 @@ Revisi Voice Co-Pilot (2026-10-10, dari `PRD-Hoplite-Revisi-Voice-Copilot.md`) s
 - `app/lib/features/route/trip_session.dart` menyatukan simulator, skenario, dan co-pilot untuk kedua
   layar navigasi. `nav_sim.dart` kini punya ruas macet (`SlowZone`) dan `switchRoute`.
 - Skenario kejadian per perjalanan ada di `tripScenario` (`mock_data.dart`).
-- Tab Pulse Report menjadi layar suara; formulir lama pindah ke `/report-form`
-  (`report_form_screen.dart`). Detail laporan suara menampilkan isi tool call `report_traffic`.
+- Detail laporan suara menampilkan isi tool call `report_traffic`.
 - Android: izin `RECORD_AUDIO` dan `queries` untuk pengenal suara dan TTS.
-- `app/README.md` dan PRD di Claude Docs sudah memuat revisi ini.
 
-`flutter analyze` bersih dan `flutter test` lulus (19 tes). APK release berhasil dibangun
-(`app/build/app/outputs/flutter-apk/app-release.apk`, 83 MB) tetapi belum dijalankan di perangkat mana
-pun; pengguna akan mencobanya di HP sendiri.
+Revisi Pulse Report (2026-10-12): hanya satu cara melapor. Ketuk mikrofon, ucapkan kejadiannya,
+"AI" mengklasifikasi (gimik: aturan kata `intent.dart` + `classifierConfidence`), kamera di dalam
+aplikasi langsung terbuka (`evidence_camera_screen.dart`, foto wajib), lalu laporan terkirim dengan
+GPS sungguhan (`data/device_location.dart`, nama jalan dari Photon reverse). Formulir foto
+(`/report-form`) dan kartu "suara dibanding formulir" dihapus. Selama navigasi laporan tetap suara
+saja, tanpa kamera (keselamatan pengemudi). Paket baru: `camera`, `geolocator`; izin `CAMERA` dan
+lokasi. Sudah diuji di emulator: mikrofon, klasifikasi, kamera, foto, kirim, kamera ditutup tanpa
+foto, detail laporan. `app/README.md` sudah memuat revisi ini.
 
-Catatan build di laptop pengguna (drive C hampir penuh, emulator menolak menyala karena disk):
+Revisi dosen (2026-10-12): Laporan Warga dan Saldo Pulse.
+
+- Laporan Warga (`app/lib/features/community/`): tab kedua di Pulse Report (`/pulse?tab=warga`),
+  strip di Home, detail `/community/:id` dengan konfirmasi "Masih ada"/"Sudah aman" dan tindak lanjut
+  instansi. Data di `citizenReports` (`mock_data.dart`), foto dari Wikimedia Commons di
+  `assets/images/reports/` (kredit di `app/README.md`).
+- Saldo Pulse (`app/lib/features/rewards/`): `/rewards`, voucher QR `/voucher/:id` (`qr_flutter`).
+  Saldo = `seedWallet` + laporan suara yang terverifikasi (diturunkan dari `reportsProvider`) +
+  konfirmasi − penukaran. Katalog layanan Pemkot dan tarifnya di `rewardCatalog`.
+- Teks di layar dibuat seperti aplikasi rilis (permintaan pengguna): tanpa "demo"/"simulasi", JSON
+  tool call di detail laporan diganti "Data laporan", catatan Panic Button menjadi "hubungi 112".
+- Diuji di emulator: Home, tab Laporan Warga, konfirmasi + notifikasi saldo, Saldo Pulse, tukar
+  voucher KBS + QR, Profil, alur lapor suara + foto sampai terverifikasi dan masuk umpan.
+
+Perbaikan layar sempit (2026-10-12): tile fitur Home sama tinggi (label mengecil, `IntrinsicHeight`),
+katalog Saldo Pulse tidak lagi pakai grid tinggi tetap, chip di detail Laporan Warga memakai `Wrap`.
+Diuji di emulator dengan `adb shell wm density 480` (lebar 360 dp); kembalikan dengan `wm density reset`.
+
+`flutter analyze` bersih dan `flutter test` lulus (24 tes). APK release terbaru:
+`SPARTA-Hoplite-v1.1.0.apk` di root repo (diabaikan git), belum dicoba di HP.
+
+Laptop kedua (git user zeinmhasan): Flutter 3.38.2 di `C:\flutter` (di PATH), build debug dan release
+jalan tanpa pengaturan tambahan. Lokasi emulator diatur dengan `adb emu geo fix 112.7951 -7.2797`
+(Keputih).
+
+Catatan build di laptop rayahmd (drive C hampir penuh, emulator menolak menyala karena disk):
 
 - Flutter 3.38.2 ada di `E:\tools\flutter`, tidak di PATH. Pakai `PUB_CACHE=E:\tools\pub-cache` dan
   `GRADLE_USER_HOME=D:\gradle-home`.
@@ -71,6 +99,8 @@ Catatan build di laptop pengguna (drive C hampir penuh, emulator menolak menyala
   `android.ndkVersion` di `afterEvaluate`. File proyek tidak diubah untuk itu.
 
 Belum diuji di perangkat:
+
+- Pulse Report di HP: pengenalan ucapan bahasa Indonesia, kamera belakang, dan akurasi GPS di dalam ruangan.
 
 - Voice Co-Pilot seluruhnya: suara TTS bahasa Indonesia, pengenalan jawaban, izin mikrofon, tombol
   mikrofon dan speaker, pindah rute di peta 3D, dan tata letak panel suara di layar navigasi.

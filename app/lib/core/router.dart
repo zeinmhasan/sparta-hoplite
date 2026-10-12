@@ -2,14 +2,17 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../features/community/community_detail_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/home/insights_screen.dart';
 import '../features/notifications/notifications_screen.dart';
 import '../features/panic/panic_screen.dart';
 import '../features/profile/profile_screen.dart';
+import '../features/pulse/evidence_camera_screen.dart';
 import '../features/pulse/my_reports_screen.dart';
 import '../features/pulse/pulse_screen.dart';
-import '../features/pulse/report_form_screen.dart';
+import '../features/rewards/rewards_screen.dart';
+import '../features/rewards/voucher_screen.dart';
 import '../features/route/navigation_3d_screen.dart';
 import '../features/route/navigation_screen.dart';
 import '../features/route/route_detail_screen.dart';
@@ -19,6 +22,7 @@ import '../features/splash/splash_screen.dart';
 import '../features/transit/assistant_screen.dart';
 import '../features/transit/bus_tracking_screen.dart';
 import '../features/transit/transit_screen.dart';
+import '../features/voice/intent.dart';
 import 'shell.dart';
 
 /// Tab di dalam kerangka berganti dengan fade singkat, bukan geser.
@@ -68,7 +72,19 @@ final router = GoRouter(
     GoRoute(path: '/assistant', builder: (context, state) => const AssistantScreen()),
     GoRoute(path: '/insights', builder: (context, state) => const InsightsScreen()),
     GoRoute(path: '/notifications', builder: (context, state) => const NotificationsScreen()),
-    GoRoute(path: '/report-form', builder: (context, state) => const ReportFormScreen()),
+    GoRoute(
+      path: '/report-camera',
+      builder: (context, state) => EvidenceCameraScreen(report: state.extra! as ClassifiedReport),
+    ),
+    GoRoute(
+      path: '/community/:id',
+      builder: (context, state) => CommunityDetailScreen(reportId: state.pathParameters['id']!),
+    ),
+    GoRoute(path: '/rewards', builder: (context, state) => const RewardsScreen()),
+    GoRoute(
+      path: '/voucher/:id',
+      builder: (context, state) => VoucherScreen(voucherId: state.pathParameters['id']!),
+    ),
     GoRoute(path: '/reports', builder: (context, state) => const MyReportsScreen()),
     GoRoute(
       path: '/reports/:id',

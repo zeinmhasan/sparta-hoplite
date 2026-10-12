@@ -6,13 +6,14 @@ import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../../data/mock_data.dart' as mock;
 import '../../data/state.dart';
+import '../rewards/rewards_screen.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final reportCount = ref.watch(reportsProvider).length;
+    final verified = ref.watch(verifiedCountProvider);
 
     Widget stat(String value, String label) => Expanded(
       child: Column(
@@ -39,7 +40,7 @@ class ProfileScreen extends ConsumerWidget {
       onTap: onTap,
     );
 
-    void soon() => toast(context, 'Belum tersedia di versi demo');
+    void soon() => toast(context, 'Segera hadir');
 
     return SafeArea(
       bottom: false,
@@ -72,7 +73,6 @@ class ProfileScreen extends ConsumerWidget {
                         ],
                       ),
                     ),
-                    const AiBadge(label: 'Pelapor Tepercaya'),
                   ],
                 ),
                 const Divider(height: 32),
@@ -80,17 +80,26 @@ class ProfileScreen extends ConsumerWidget {
                   children: [
                     stat('42', 'Perjalanan\nbulan ini'),
                     stat('18', 'Naik Suroboyo\nBus'),
-                    stat('$reportCount', 'Laporan\nPulse'),
+                    stat('$verified', 'Laporan\nterverifikasi'),
                   ],
                 ),
               ],
             ),
           ),
           const SizedBox(height: 16),
+          WalletCard(onTap: () => context.push('/rewards')),
+          const SizedBox(height: 16),
           AppCard(
             padding: EdgeInsets.zero,
             child: Column(
               children: [
+                menu(
+                  Icons.redeem_rounded,
+                  'Saldo & Hadiah',
+                  'Tukar saldo dengan tiket bus dan wisata kota',
+                  () => context.push('/rewards'),
+                ),
+                const Divider(indent: 72),
                 menu(Icons.two_wheeler_rounded, 'Kendaraan utama', 'Motor • L 1234 AB', soon),
                 const Divider(indent: 72),
                 menu(Icons.bookmark_outline_rounded, 'Tempat tersimpan', 'Rumah, Kampus ITS, Kantor', soon),
@@ -123,7 +132,7 @@ class ProfileScreen extends ConsumerWidget {
                     children: [
                       Text('SPARTA Hoplite', style: AppText.bodyStrong),
                       SizedBox(height: 2),
-                      Text('Versi demo 1.0 • data simulasi', style: AppText.caption),
+                      Text('Versi 1.0.0 • Pemerintah Kota Surabaya', style: AppText.caption),
                     ],
                   ),
                 ),

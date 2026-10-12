@@ -116,7 +116,7 @@ class ScreenHeader extends StatelessWidget {
           trailing ??
               IconButton(
                 icon: const Icon(Icons.more_vert_rounded, color: AppColors.text),
-                onPressed: () => toast(context, 'Pengaturan belum tersedia di versi demo'),
+                onPressed: () => toast(context, 'Pengaturan segera hadir'),
               ),
         ],
       ),
@@ -219,6 +219,63 @@ void toast(BuildContext context, String message) {
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
     ..showSnackBar(SnackBar(content: Text(message), duration: const Duration(seconds: 2)));
+}
+
+/// Waktu relatif singkat, mis. "5 menit lalu".
+String timeAgo(DateTime time, DateTime now) {
+  final diff = now.difference(time);
+  if (diff.inMinutes < 1) return 'Baru saja';
+  if (diff.inHours < 1) return '${diff.inMinutes} menit lalu';
+  if (diff.inDays < 1) return '${diff.inHours} jam lalu';
+  return '${diff.inDays} hari lalu';
+}
+
+const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+
+/// Tanggal dan jam, mis. "13 Okt 2026, 14.30".
+String dateTimeLabel(DateTime time) =>
+    '${time.day} ${_months[time.month - 1]} ${time.year}, '
+    '${time.hour.toString().padLeft(2, '0')}.${time.minute.toString().padLeft(2, '0')}';
+
+/// Notifikasi saldo masuk: ikon dompet, judul, dan nominal.
+void rewardToast(ScaffoldMessengerState messenger, String title, int amount, {VoidCallback? onOpen}) {
+  messenger
+    ..hideCurrentSnackBar()
+    ..showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: AppColors.text,
+        duration: const Duration(seconds: 4),
+        content: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: const BoxDecoration(color: Color(0xFFFFC55A), shape: BoxShape.circle),
+              child: const Icon(Icons.account_balance_wallet_rounded, size: 18, color: AppColors.text),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(fontWeight: FontWeight.w700, color: Colors.white),
+                  ),
+                  Text(
+                    'Saldo Pulse +${rupiah(amount)}',
+                    style: const TextStyle(fontSize: 12.5, color: Color(0xFFFFC55A), fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        action: onOpen == null ? null : SnackBarAction(label: 'Lihat', textColor: Colors.white, onPressed: onOpen),
+      ),
+    );
 }
 
 class SheetHandle extends StatelessWidget {

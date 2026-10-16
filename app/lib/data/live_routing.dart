@@ -64,6 +64,25 @@ IconData _iconFor(String? key, String? value) => switch ((key, value)) {
   _ => Icons.place_outlined,
 };
 
+/// Nama jalan (tanpa awalan "Jl.") dan alamat singkat di titik [point], dari Photon.
+Future<(String road, String address)?> reverseGeocode(LatLng point) async {
+  final uri = Uri.https('photon.komoot.io', '/reverse', {
+    'lat': '${point.latitude}',
+    'lon': '${point.longitude}',
+    'limit': '1',
+  });
+  final response = await http.get(uri, headers: _headers).timeout(const Duration(seconds: 6));
+  if (response.statusCode != 200) return null;
+  final features = jsonDecode(utf8.decode(response.bodyBytes))['features'] as List;
+  if (features.isEmpty) return null;
+  final props = features.first['properties'] as Map<String, dynamic>;
+  final street = (props['street'] ?? props['name']) as String?;
+  if (street == null) return null;
+  final road = street.replaceFirst(RegExp(r'^(Jalan|Jl\.?)\s+', caseSensitive: false), '');
+  final address = ['Jl. $road', props['district'], props['city']].whereType<String>().join(', ');
+  return (road, address);
+}
+
 /// Sampai tiga rute dari [from] ke [to], diurutkan dari yang terpendek.
 Future<List<RouteGeo>> fetchRouteGeometry(LatLng from, LatLng to) async {
   final found = [

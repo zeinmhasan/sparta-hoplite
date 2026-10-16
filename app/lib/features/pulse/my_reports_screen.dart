@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,6 +6,7 @@ import '../../core/theme.dart';
 import '../../core/widgets.dart';
 import '../../data/models.dart';
 import '../../data/state.dart';
+import 'evidence_camera_screen.dart';
 
 Color _statusColor(ReportStatus status) => switch (status) {
   ReportStatus.terkirim => AppColors.textSecondary,
@@ -15,14 +14,6 @@ Color _statusColor(ReportStatus status) => switch (status) {
   ReportStatus.diproses => const Color(0xFFB07A00),
   ReportStatus.selesai => AppColors.lancar,
 };
-
-String _timeAgo(DateTime time, DateTime now) {
-  final diff = now.difference(time);
-  if (diff.inMinutes < 1) return 'Baru saja';
-  if (diff.inHours < 1) return '${diff.inMinutes} menit lalu';
-  if (diff.inDays < 1) return '${diff.inHours} jam lalu';
-  return '${diff.inDays} hari lalu';
-}
 
 class _StatusChip extends StatelessWidget {
   const _StatusChip(this.status);
@@ -63,6 +54,7 @@ class MyReportsScreen extends ConsumerWidget {
                 separatorBuilder: (context, _) => const SizedBox(height: 12),
                 itemBuilder: (context, i) {
                   final report = reports[i];
+                  final photo = report.photoPath;
                   return AppCard(
                     onTap: () => context.push('/reports/${report.id}'),
                     child: Row(
@@ -70,11 +62,12 @@ class MyReportsScreen extends ConsumerWidget {
                         Container(
                           width: 46,
                           height: 46,
+                          clipBehavior: Clip.antiAlias,
                           decoration: BoxDecoration(
                             color: AppColors.maroon.withValues(alpha: 0.08),
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: Icon(report.icon, color: AppColors.maroon),
+                          child: photo == null ? Icon(report.icon, color: AppColors.maroon) : evidenceImage(photo),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -85,7 +78,7 @@ class MyReportsScreen extends ConsumerWidget {
                               const SizedBox(height: 3),
                               Text(report.location, style: AppText.caption),
                               const SizedBox(height: 3),
-                              Text('${report.id} • ${_timeAgo(report.createdAt, now)}', style: AppText.caption),
+                              Text('${report.id} • ${timeAgo(report.createdAt, now)}', style: AppText.caption),
                             ],
                           ),
                         ),
@@ -114,6 +107,7 @@ class ReportDetailScreen extends ConsumerWidget {
     final status = report.statusAt(now);
     final call = report.call;
     final trust = report.trustAt(now);
+    final photo = report.photoPath;
 
     return Scaffold(
       body: SafeArea(
@@ -124,6 +118,13 @@ class ReportDetailScreen extends ConsumerWidget {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
                 children: [
+                  if (photo != null) ...[
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: AspectRatio(aspectRatio: 4 / 3, child: evidenceImage(photo)),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                   AppCard(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -144,14 +145,16 @@ class ReportDetailScreen extends ConsumerWidget {
                         if (call == null)
                           _InfoRow(
                             icon: Icons.photo_library_outlined,
-                            text: '${report.photoCount} foto • ${_timeAgo(report.createdAt, now)}',
+                            text: '${report.photoCount} foto • ${timeAgo(report.createdAt, now)}',
                           )
                         else
                           _InfoRow(
                             icon: Icons.mic_none_rounded,
-                            text:
-                                'Lewat suara • ${call.utterances} ucapan • ${call.seconds} dtk • '
-                                '${_timeAgo(report.createdAt, now)}',
+                            text: [
+                              'Lewat suara',
+                              if (photo != null) '1 foto bukti',
+                              timeAgo(report.createdAt, now),
+                            ].join(' • '),
                           ),
                         const SizedBox(height: 10),
                         Row(
@@ -179,20 +182,27 @@ class ReportDetailScreen extends ConsumerWidget {
                   ),
                   if (call != null) ...[
                     const SizedBox(height: 22),
-                    const SectionLabel('Tool call ke Pulse'),
+                    const SectionLabel('Data laporan'),
                     const SizedBox(height: 10),
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(color: AppColors.field, borderRadius: BorderRadius.circular(12)),
-                      child: Text(
-                        const JsonEncoder.withIndent('  ').convert(call.toJson()),
-                        style: const TextStyle(fontFamily: 'monospace', fontSize: 11.5, height: 1.45),
+                    AppCard(
+                      child: Column(
+                        children: [
+                          _DataRow(
+                            'Jenis',
+                            '${call.type.label} • ${call.severity.label}',
+                            badge: call.confidence == null ? null : 'AI ${(call.confidence! * 100).round()}%',
+                          ),
+                          if (call.transcript.isNotEmpty) _DataRow('Ucapan', '“${call.transcript}”'),
+                          _DataRow(
+                            'Koordinat',
+                            '${call.position.latitude.toStringAsFixed(5)}, '
+                                '${call.position.longitude.toStringAsFixed(5)}',
+                          ),
+                          _DataRow('Waktu', dateTimeLabel(call.timestamp)),
+                          if (call.speedKmh > 0) _DataRow('Kecepatan', '${call.speedKmh} km/jam'),
+                          _DataRow('Bukti', photo == null ? 'Laporan suara saat berkendara' : '1 foto dari kamera'),
+                        ],
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Jenis dan tingkat keparahan dari jawaban Anda. Sisanya diisi otomatis dari posisi kendaraan.',
-                      style: AppText.caption,
                     ),
                   ],
                   const SizedBox(height: 22),
@@ -301,6 +311,28 @@ class _StatusStep extends StatelessWidget {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DataRow extends StatelessWidget {
+  const _DataRow(this.label, this.value, {this.badge});
+  final String label;
+  final String value;
+  final String? badge;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(width: 92, child: Text(label, style: AppText.caption)),
+          Expanded(child: Text(value, style: AppText.body.copyWith(fontSize: 13.5))),
+          if (badge != null) AiBadge(label: badge!),
         ],
       ),
     );

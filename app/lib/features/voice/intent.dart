@@ -20,6 +20,15 @@ class ReportIntent {
   final Severity severity;
 }
 
+/// Laporan suara yang sudah diklasifikasi: jenis, keparahan, ucapan asalnya,
+/// dan keyakinan klasifikasi.
+class ClassifiedReport {
+  const ClassifiedReport(this.intent, this.transcript, this.confidence);
+  final ReportIntent intent;
+  final String transcript;
+  final double confidence;
+}
+
 /// Keputusan dari jawaban atas pertanyaan lapor: melapor, atau tidak jadi
 /// ([intent] null).
 class ReportDecision {
@@ -115,3 +124,12 @@ bool? decideYesNo(VoiceAnswer a) => a.confirm;
 
 /// Jawaban atas "Masih macet?": "parah" atau "macet" saja juga berarti masih.
 bool? decideStill(VoiceAnswer a) => a.confirm ?? (a.severity != null || a.type == IncidentType.macet ? true : null);
+
+/// Keyakinan klasifikasi yang ditampilkan di demo, 0,86 sampai 0,98. Simulasi:
+/// klasifikasi sesungguhnya memakai aturan kata di atas, angka ini hanya tetap
+/// untuk ucapan yang sama dan lebih tinggi jika jenis kejadian disebut jelas.
+double classifierConfidence(String heard, ReportIntent intent) {
+  final named = parseAnswer(heard).type == intent.type;
+  final spread = heard.toLowerCase().codeUnits.fold(intent.type.index * 7, (sum, c) => (sum * 31 + c) % 997);
+  return (named ? 0.92 : 0.86) + spread % 7 / 100;
+}

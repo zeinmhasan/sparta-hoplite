@@ -408,7 +408,7 @@ class _CallSheetState extends State<_CallSheet> {
               label: const Text('Akhiri Panggilan'),
             ),
             const SizedBox(height: 10),
-            const Text('Mode demo: ini simulasi, tidak ada panggilan sungguhan.', style: AppText.caption),
+            const Text('Jika panggilan terputus, hubungi 112 langsung.', style: AppText.caption),
           ],
         ),
       ),

@@ -58,11 +58,13 @@ class VoiceConfig {
 
 enum VoicePhase { idle, speaking, listening }
 
-/// Jawaban yang dipahami, beserta jumlah ucapan pengguna sampai dipahami.
+/// Jawaban yang dipahami, beserta jumlah ucapan pengguna sampai dipahami dan
+/// ucapan terakhirnya.
 class Answered<A> {
-  const Answered(this.value, this.utterances);
+  const Answered(this.value, this.utterances, [this.heard = '']);
   final A value;
   final int utterances;
+  final String heard;
 }
 
 /// Pengatur giliran bicara: Hoplite berbicara, lalu mendengarkan satu jawaban
@@ -189,7 +191,7 @@ class VoiceCopilot extends ChangeNotifier {
       _tapped = null;
       if (heard == null) return null;
       final value = decide(parseAnswer(heard));
-      if (value != null) return Answered(value, attempt);
+      if (value != null) return Answered(value, attempt, heard);
     }
     if (giveUp != null) await say(giveUp);
     return null;
@@ -225,7 +227,7 @@ Future<Answered<ReportIntent>?> askWhatToReport(VoiceCopilot copilot) async {
     await copilot.say('Oke, tidak jadi.');
     return null;
   }
-  return Answered(intent, reply.utterances);
+  return Answered(intent, reply.utterances, reply.heard);
 }
 
 final voiceEngineProvider = Provider<VoiceEngine>((ref) => DeviceVoiceEngine());

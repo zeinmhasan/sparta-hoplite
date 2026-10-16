@@ -8,6 +8,8 @@ import '../../core/widgets.dart';
 import '../../data/mock_data.dart' as mock;
 import '../../data/models.dart';
 import '../../data/state.dart';
+import '../community/community_feed.dart';
+import '../community/community_widgets.dart';
 import 'insights_screen.dart';
 import 'weather_card.dart';
 
@@ -87,37 +89,55 @@ class HomeScreen extends ConsumerWidget {
           const SizedBox(height: 14),
           _TransitCard(onTap: () => context.go('/transit')),
           const SizedBox(height: 18),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _FeatureTile(
+                  label: 'Smart\nRoute',
+                  icon: Icons.near_me_outlined,
+                  color: AppColors.navy,
+                  onTap: () => context.go('/route'),
+                ),
+                const SizedBox(width: 10),
+                _FeatureTile(
+                  label: 'Transportasi\nUmum',
+                  icon: Icons.directions_bus_outlined,
+                  color: AppColors.teal,
+                  onTap: () => context.go('/transit'),
+                ),
+                const SizedBox(width: 10),
+                _FeatureTile(
+                  label: 'Pulse\nReport',
+                  icon: Icons.campaign_outlined,
+                  color: AppColors.purple,
+                  onTap: () => context.go('/pulse'),
+                ),
+                const SizedBox(width: 10),
+                _FeatureTile(
+                  label: 'Panic\nButton',
+                  icon: Icons.emergency_rounded,
+                  color: AppColors.emergency,
+                  onTap: () => context.go('/panic'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
           Row(
             children: [
-              _FeatureTile(
-                label: 'Smart\nRoute',
-                icon: Icons.near_me_outlined,
-                color: AppColors.navy,
-                onTap: () => context.go('/route'),
-              ),
-              const SizedBox(width: 10),
-              _FeatureTile(
-                label: 'Transportasi\nUmum',
-                icon: Icons.directions_bus_outlined,
-                color: AppColors.teal,
-                onTap: () => context.go('/transit'),
-              ),
-              const SizedBox(width: 10),
-              _FeatureTile(
-                label: 'Pulse\nReport',
-                icon: Icons.campaign_outlined,
-                color: AppColors.purple,
-                onTap: () => context.go('/pulse'),
-              ),
-              const SizedBox(width: 10),
-              _FeatureTile(
-                label: 'Panic\nButton',
-                icon: Icons.emergency_rounded,
-                color: AppColors.emergency,
-                onTap: () => context.go('/panic'),
+              const Expanded(child: Text('Laporan Warga', style: AppText.sectionTitle)),
+              TextButton(
+                onPressed: () => context.go('/pulse?tab=warga'),
+                child: const Text(
+                  'Lihat Semua',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.maroon),
+                ),
               ),
             ],
           ),
+          const SizedBox(height: 6),
+          const _CitizenStrip(),
         ].animate(interval: 50.ms).fadeIn(duration: 300.ms).slideY(begin: 0.06, end: 0, curve: Curves.easeOut),
       ),
     );
@@ -311,6 +331,7 @@ class _FeatureTile extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 4),
             child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Container(
                   width: 42,
@@ -319,15 +340,95 @@ class _FeatureTile extends StatelessWidget {
                   child: Icon(icon, color: Colors.white, size: 22),
                 ),
                 const SizedBox(height: 12),
-                Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, height: 1.3, color: Colors.white),
+                // Label mengecil di layar sempit alih-alih pindah baris, jadi semua tile tetap dua
+                // baris dan sama tinggi. Kedua baris diperkecil bersama supaya ukurannya sama.
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                      height: 1.3,
+                      color: Colors.white,
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Laporan warga terbaru yang masih aktif, digeser ke samping.
+class _CitizenStrip extends ConsumerWidget {
+  const _CitizenStrip();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final now = ref.watch(nowProvider);
+    final user = ref.watch(userPointProvider);
+    final reports = ref.watch(citizenFeedProvider).where((r) => r.status != CitizenStatus.selesai).take(5).toList();
+
+    return SizedBox(
+      height: 214,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        clipBehavior: Clip.none,
+        itemCount: reports.length,
+        separatorBuilder: (context, _) => const SizedBox(width: 12),
+        itemBuilder: (context, i) {
+          final r = reports[i];
+          return SizedBox(
+            width: 236,
+            child: AppCard(
+              padding: EdgeInsets.zero,
+              onTap: () => openCitizenReport(context, r),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    height: 120,
+                    width: double.infinity,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        CitizenPhoto(report: r),
+                        Positioned(left: 8, top: 8, child: IncidentChip(r.type)),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(r.road, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppText.bodyStrong),
+                        const SizedBox(height: 2),
+                        Text('${distanceTo(user, r.point)} • ${timeAgo(r.createdAt, now)}', style: AppText.caption),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Icon(r.status.icon, size: 14, color: r.status.color),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${r.status.label} • ${r.stillThere} warga',
+                              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: r.status.color),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }

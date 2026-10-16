@@ -10,14 +10,6 @@ abstract class HopliteRepository {
   Future<List<RouteOption>> routes(Place destination);
   Future<List<TransitPlan>> transitPlans(Place destination);
   Future<AssistantReply> askAssistant(String question);
-  Future<Report> submitReport({
-    required ReportCategory category,
-    required String description,
-    required String location,
-    required int photoCount,
-    int? interactions,
-    int? seconds,
-  });
 
   /// Menjalankan tool `report_traffic`: laporan suara ke Pulse.
   Future<Report> reportTraffic(TrafficCall call);
@@ -64,30 +56,6 @@ class MockRepository implements HopliteRepository {
     return mock.assistantAnswer(question, DateTime.now());
   }
 
-  @override
-  Future<Report> submitReport({
-    required ReportCategory category,
-    required String description,
-    required String location,
-    required int photoCount,
-    int? interactions,
-    int? seconds,
-  }) async {
-    await _latency(1200);
-    final now = DateTime.now();
-    return Report(
-      id: _reportId(now),
-      category: category,
-      description: description,
-      location: location,
-      createdAt: now,
-      photoCount: photoCount,
-      priority: category == ReportCategory.kecelakaan || category == ReportCategory.banjir ? 'Tinggi' : 'Sedang',
-      interactions: interactions,
-      seconds: seconds,
-    );
-  }
-
   String _reportId(DateTime now) => 'SP-2610-${now.millisecondsSinceEpoch ~/ 1000 % 9000 + 1000}';
 
   @override
@@ -97,17 +65,18 @@ class MockRepository implements HopliteRepository {
     return Report(
       id: _reportId(call.timestamp),
       category: call.type.category,
-      description: 'Laporan suara: ${call.type.label.toLowerCase()}, tingkat ${call.severity.label.toLowerCase()}.',
-      location: 'Jl. ${call.road}, Surabaya',
+      description: call.transcript.isEmpty
+          ? 'Laporan suara: ${call.type.label.toLowerCase()}, tingkat ${call.severity.label.toLowerCase()}.'
+          : '“${call.transcript}”. Diklasifikasi AI sebagai ${call.type.label.toLowerCase()}, '
+                'tingkat ${call.severity.label.toLowerCase()}.',
+      location: call.address ?? 'Jl. ${call.road}, Surabaya',
       createdAt: call.timestamp,
-      photoCount: 0,
+      photoCount: call.photoPath == null ? 0 : 1,
       priority: urgent || call.severity == Severity.parah
           ? 'Tinggi'
           : (call.severity == Severity.sedang ? 'Sedang' : 'Rendah'),
       call: call,
       speedConfirmed: call.type == IncidentType.macet && call.crawling,
-      interactions: call.utterances,
-      seconds: call.seconds,
     );
   }
 

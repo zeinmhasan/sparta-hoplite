@@ -188,15 +188,13 @@ class TripCopilot {
   Future<void> userReport() async {
     if (_frame == null) return;
     await copilot.run(() async {
-      final asked = _now;
       final reply = await askWhatToReport(copilot);
-      if (reply != null) await _report(reply.value, reply.utterances, asked);
+      if (reply != null) await _report(reply.value, reply.heard);
       _quietUntil = _now.add(_config.speechGap);
     });
   }
 
   Future<void> _askJam() async {
-    final asked = _now;
     final reply = await copilot.ask(
       'Di sini macet?',
       decide: decideJam,
@@ -210,12 +208,12 @@ class TripCopilot {
       await copilot.say('Oke.');
       return;
     }
-    await _report(intent, reply.utterances, asked);
+    await _report(intent, reply.heard);
   }
 
   /// Memanggil tool `report_traffic`. Posisi, arah, kecepatan, ruas, dan waktu
   /// dibaca dari kendaraan saat itu, bukan dari ucapan.
-  Future<void> _report(ReportIntent intent, int utterances, DateTime asked) async {
+  Future<void> _report(ReportIntent intent, String heard) async {
     final frame = _frame;
     if (frame == null) return;
     await send(
@@ -228,8 +226,8 @@ class TripCopilot {
         road: roadAt(_route, frame.meters),
         timestamp: _now,
         crawling: frame.speed < cruiseSpeed * _config.slowRatio,
-        utterances: utterances,
-        seconds: _now.difference(asked).inSeconds,
+        transcript: heard,
+        confidence: classifierConfidence(heard, intent),
       ),
     );
     await copilot.say('Oke, dilaporkan.');

@@ -21,6 +21,9 @@ dependencies:
   maplibre_gl: ^0.27.1
   flutter_tts: ^4.2.5
   speech_to_text: ^7.4.0
+  camera: ^0.12.0+2
+  geolocator: ^14.1.1
+  qr_flutter: ^4.1.0
 
 dev_dependencies:
   flutter_test:
@@ -40,6 +43,7 @@ flutter:
 
   assets:
     - assets/images/
+    - assets/images/reports/
 
   fonts:
     - family: Inter

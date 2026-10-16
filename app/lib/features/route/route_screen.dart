@@ -14,9 +14,9 @@ import 'departure.dart';
 
 String trafficSentence(TrafficLevel level) => 'Lalu lintas ${level.label.toLowerCase()}';
 
-/// Jam tiba jika berangkat pada horizon terpilih.
-String arrivalLabel(DateTime now, Horizon horizon, int minutes) =>
-    'Tiba ${formatClock(now.add(Duration(minutes: horizon.minutes + minutes)))}';
+/// Jam tiba jika berangkat pada waktu berangkat terpilih.
+String arrivalLabel(Departure departure, int minutes) =>
+    'Tiba ${formatClock(departure.time.add(Duration(minutes: minutes)))}';
 
 class RouteScreen extends ConsumerWidget {
   const RouteScreen({super.key});
@@ -29,18 +29,18 @@ class RouteScreen extends ConsumerWidget {
   Future<void> _pickDeparture(BuildContext context, WidgetRef ref) async {
     final picked = await showDepartureSheet(
       context,
-      current: ref.read(horizonProvider),
+      current: ref.read(departureProvider),
       routes: ref.read(tripRoutesProvider).value,
       mode: ref.read(vehicleModeProvider),
     );
-    if (picked != null) ref.read(horizonProvider.notifier).state = picked;
+    if (picked != null) ref.read(departureProvider.notifier).state = picked;
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final destination = ref.watch(destinationProvider);
     final swapped = ref.watch(swappedProvider);
-    final horizon = ref.watch(horizonProvider);
+    final departure = ref.watch(departureProvider);
     final mode = ref.watch(vehicleModeProvider);
     final routes = ref.watch(tripRoutesProvider);
 
@@ -91,16 +91,16 @@ class RouteScreen extends ConsumerWidget {
                   ],
                 ),
                 const SizedBox(height: 12),
-                DepartureButton(horizon: horizon, onTap: () => _pickDeparture(context, ref)),
+                DepartureButton(departure: departure, onTap: () => _pickDeparture(context, ref)),
                 const SizedBox(height: 16),
                 routes.when(
                   loading: () => const _RouteSkeleton(),
                   error: (error, _) => _RouteError(onRetry: () => ref.invalidate(routesProvider(destination))),
                   // Kunci baru tiap pilihan berubah, supaya kartu muncul ulang dengan animasi.
                   data: (list) => Column(
-                    key: ValueKey('$horizon-$mode-${destination.id}-$swapped'),
+                    key: ValueKey('$departure-$mode-${destination.id}-$swapped'),
                     crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: _routeCards(context, rankRoutes(list, horizon, mode), horizon, mode),
+                    children: _routeCards(context, rankRoutes(list, departure, mode), departure, mode),
                   ),
                 ),
               ],
@@ -111,18 +111,17 @@ class RouteScreen extends ConsumerWidget {
     );
   }
 
-  List<Widget> _routeCards(BuildContext context, List<RouteOption> ranked, Horizon horizon, VehicleMode mode) {
-    final now = DateTime.now();
+  List<Widget> _routeCards(BuildContext context, List<RouteOption> ranked, Departure departure, VehicleMode mode) {
     final best = ranked.first;
-    final saved = ranked.length > 1 ? ranked[1].minutes(horizon, mode) - best.minutes(horizon, mode) : 0;
+    final saved = ranked.length > 1 ? ranked[1].minutes(departure, mode) - best.minutes(departure, mode) : 0;
     void open(RouteOption route) => context.push('/route-detail/${route.index}');
 
     return [
       _RecommendedCard(
         route: best,
-        minutes: best.minutes(horizon, mode),
-        arrival: arrivalLabel(now, horizon, best.minutes(horizon, mode)),
-        level: best.level(horizon),
+        minutes: best.minutes(departure, mode),
+        arrival: arrivalLabel(departure, best.minutes(departure, mode)),
+        level: best.level(departure),
         saved: saved,
         onTap: () => open(best),
       ),
@@ -131,17 +130,17 @@ class RouteScreen extends ConsumerWidget {
         _AlternativeCard(
           title: 'Rute Alternatif $i',
           route: ranked[i],
-          minutes: ranked[i].minutes(horizon, mode),
-          arrival: arrivalLabel(now, horizon, ranked[i].minutes(horizon, mode)),
-          level: ranked[i].level(horizon),
-          extra: ranked[i].minutes(horizon, mode) - best.minutes(horizon, mode),
+          minutes: ranked[i].minutes(departure, mode),
+          arrival: arrivalLabel(departure, ranked[i].minutes(departure, mode)),
+          level: ranked[i].level(departure),
+          extra: ranked[i].minutes(departure, mode) - best.minutes(departure, mode),
           onTap: () => open(ranked[i]),
         ),
       ],
       if (ranked.length > 1) ...[
         const SizedBox(height: 14),
         OutlinedButton.icon(
-          onPressed: () => _showComparison(context, ranked, horizon, mode),
+          onPressed: () => _showComparison(context, ranked, departure, mode),
           icon: const Icon(Icons.compare_arrows_rounded, size: 20),
           label: const Text('Lihat Perbandingan Rute'),
           style: OutlinedButton.styleFrom(backgroundColor: Colors.white),
@@ -398,7 +397,7 @@ class _RouteSkeleton extends StatelessWidget {
   }
 }
 
-void _showComparison(BuildContext context, List<RouteOption> ranked, Horizon horizon, VehicleMode mode) {
+void _showComparison(BuildContext context, List<RouteOption> ranked, Departure departure, VehicleMode mode) {
   Widget cell(String text, {bool head = false, bool strong = false}) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
     child: Text(
@@ -421,7 +420,7 @@ void _showComparison(BuildContext context, List<RouteOption> ranked, Horizon hor
             const SheetHandle(),
             const Text('Perbandingan Rute', style: AppText.sectionTitle),
             const SizedBox(height: 4),
-            Text(departureLabel(DateTime.now(), horizon), style: AppText.caption),
+            Text(departureLabel(departure), style: AppText.caption),
             const SizedBox(height: 10),
             Table(
               columnWidths: const {0: FlexColumnWidth(1.5), 4: FlexColumnWidth(1.3)},
@@ -441,10 +440,10 @@ void _showComparison(BuildContext context, List<RouteOption> ranked, Horizon hor
                   TableRow(
                     children: [
                       cell(i == 0 ? 'Rekomendasi AI' : 'Alternatif $i', strong: i == 0),
-                      cell('${ranked[i].minutes(horizon, mode)} mnt', strong: i == 0),
+                      cell('${ranked[i].minutes(departure, mode)} mnt', strong: i == 0),
                       cell(ranked[i].kmLabel),
                       cell('${ranked[i].intersections.length} lampu'),
-                      Align(alignment: Alignment.centerLeft, child: StatusBadge(ranked[i].level(horizon))),
+                      Align(alignment: Alignment.centerLeft, child: StatusBadge(ranked[i].level(departure))),
                     ],
                   ),
               ],

@@ -5,17 +5,12 @@ import '../../core/widgets.dart';
 import '../../data/models.dart';
 import '../../data/state.dart';
 
-/// Jam pada saat berangkat sesuai pilihan, misalnya "16.30".
-String departureClock(DateTime now, Horizon horizon) =>
-    formatClock(now.add(Duration(minutes: horizon.minutes))).replaceAll(':', '.');
+String departureLabel(Departure departure) => 'Berangkat ${departure.label}';
 
-String departureLabel(DateTime now, Horizon horizon) =>
-    horizon == Horizon.now ? 'Berangkat sekarang' : 'Berangkat ${horizon.label} • ${departureClock(now, horizon)}';
-
-/// Tombol pemilih jam berangkat. Prediksi kemacetan mengikuti jam ini.
+/// Tombol pemilih hari dan jam berangkat. Prediksi kemacetan mengikuti pilihan ini.
 class DepartureButton extends StatelessWidget {
-  const DepartureButton({super.key, required this.horizon, required this.onTap});
-  final Horizon horizon;
+  const DepartureButton({super.key, required this.departure, required this.onTap});
+  final Departure departure;
   final VoidCallback onTap;
 
   @override
@@ -39,12 +34,12 @@ class DepartureButton extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(departureLabel(DateTime.now(), horizon), style: AppText.bodyStrong),
+                    Text(departureLabel(departure), style: AppText.bodyStrong),
                     const SizedBox(height: 2),
                     Text(
-                      horizon == Horizon.now
-                          ? 'Ketuk untuk melihat prediksi hingga 6 jam ke depan'
-                          : 'Kemacetan diprediksi untuk jam berangkat ini',
+                      departure.isNow
+                          ? 'Ketuk untuk memilih hari dan jam berangkat'
+                          : 'Kemacetan diprediksi untuk hari dan jam ini',
                       style: AppText.caption,
                     ),
                   ],
@@ -59,76 +54,123 @@ class DepartureButton extends StatelessWidget {
   }
 }
 
-/// Daftar jam berangkat sampai 6 jam ke depan, masing-masing dengan ETA dan
-/// kepadatan rute terbaiknya supaya perbedaannya langsung terlihat.
-Future<Horizon?> showDepartureSheet(
+/// Jumlah hari yang bisa dipilih, mulai hari ini.
+const _days = 7;
+
+/// Jam berangkat yang bisa dipilih pada hari ke-[offset] dari hari ini. Hari ini
+/// dimulai dari "Sekarang" lalu jam-jam berikutnya; hari lain 05.00 sampai 23.00.
+List<Departure> _options(DateTime now, int offset) {
+  if (offset == 0) {
+    return [
+      Departure.now,
+      for (var h = now.hour + 1; h < 24; h++) Departure.at(DateTime(now.year, now.month, now.day, h)),
+    ];
+  }
+  return [for (var h = 5; h < 24; h++) Departure.at(DateTime(now.year, now.month, now.day + offset, h))];
+}
+
+/// Pemilih hari lalu jam berangkat. Tiap jam menampilkan ETA dan kepadatan rute
+/// terbaiknya supaya perbedaannya langsung terlihat.
+Future<Departure?> showDepartureSheet(
   BuildContext context, {
-  required Horizon current,
+  required Departure current,
   required List<RouteOption>? routes,
   required VehicleMode mode,
 }) {
   final now = DateTime.now();
-  final best = {
-    if (routes != null && routes.isNotEmpty)
-      for (final h in Horizon.values) h: rankRoutes(routes, h, mode).first,
-  };
-  final fastest = best.isEmpty
-      ? null
-      : Horizon.values.reduce((a, b) => best[b]!.minutes(b, mode) < best[a]!.minutes(a, mode) ? b : a);
+  final today = DateTime(now.year, now.month, now.day);
+  final picked = current.time;
+  var day = DateTime(picked.year, picked.month, picked.day).difference(today).inDays.clamp(0, _days - 1);
 
-  return showModalBottomSheet<Horizon>(
+  return showModalBottomSheet<Departure>(
     context: context,
     useRootNavigator: true,
     isScrollControlled: true,
-    builder: (context) => SafeArea(
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.82),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SheetHandle(),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Kapan Anda berangkat?', style: AppText.sectionTitle),
-                  SizedBox(height: 4),
-                  Text('AI memprediksi kemacetan hingga 6 jam ke depan.', style: AppText.caption),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            Flexible(
-              child: ListView(
-                shrinkWrap: true,
-                padding: const EdgeInsets.only(bottom: 12),
-                children: [
-                  for (final h in Horizon.values)
-                    _DepartureRow(
-                      horizon: h,
-                      clock: departureClock(now, h),
-                      selected: h == current,
-                      fastest: h == fastest,
-                      minutes: best[h]?.minutes(h, mode),
-                      level: best[h]?.level(h),
-                      onTap: () => Navigator.of(context).pop(h),
+    builder: (context) => StatefulBuilder(
+      builder: (context, setState) {
+        final options = _options(now, day);
+        final best = {
+          if (routes != null && routes.isNotEmpty)
+            for (final d in options) d: rankRoutes(routes, d, mode).first,
+        };
+        final fastest = best.isEmpty
+            ? null
+            : options.reduce((a, b) => best[b]!.minutes(b, mode) < best[a]!.minutes(a, mode) ? b : a);
+
+        return SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.82),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SheetHandle(),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Kapan Anda berangkat?', style: AppText.sectionTitle),
+                      SizedBox(height: 4),
+                      Text(
+                        'AI memprediksi kemacetan dari pola lalu lintas pada hari dan jam yang sama.',
+                        style: AppText.caption,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 40,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    itemCount: _days,
+                    separatorBuilder: (_, _) => const SizedBox(width: 8),
+                    itemBuilder: (context, i) => ChoiceChip(
+                      label: Text(Departure.dayLabel(today.add(Duration(days: i)), now)),
+                      selected: i == day,
+                      showCheckmark: false,
+                      selectedColor: AppColors.maroon,
+                      labelStyle: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: i == day ? Colors.white : AppColors.text,
+                      ),
+                      onSelected: (_) => setState(() => day = i),
                     ),
-                ],
-              ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Flexible(
+                  child: ListView(
+                    key: ValueKey(day),
+                    shrinkWrap: true,
+                    padding: const EdgeInsets.only(bottom: 12),
+                    children: [
+                      for (final d in options)
+                        _DepartureRow(
+                          departure: d,
+                          selected: d == current,
+                          fastest: d == fastest,
+                          minutes: best[d]?.minutes(d, mode),
+                          level: best[d]?.level(d),
+                          onTap: () => Navigator.of(context).pop(d),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     ),
   );
 }
 
 class _DepartureRow extends StatelessWidget {
   const _DepartureRow({
-    required this.horizon,
-    required this.clock,
+    required this.departure,
     required this.selected,
     required this.fastest,
     required this.minutes,
@@ -136,8 +178,7 @@ class _DepartureRow extends StatelessWidget {
     required this.onTap,
   });
 
-  final Horizon horizon;
-  final String clock;
+  final Departure departure;
   final bool selected;
   final bool fastest;
   final int? minutes;
@@ -146,6 +187,8 @@ class _DepartureRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final time = departure.time;
+    final clock = formatClock(time).replaceAll(':', '.');
     return InkWell(
       onTap: onTap,
       child: Container(
@@ -165,12 +208,15 @@ class _DepartureRow extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      Text(horizon.label, style: AppText.bodyStrong),
+                      Text(departure.isNow ? 'Sekarang' : clock, style: AppText.bodyStrong),
                       if (fastest) ...[const SizedBox(width: 8), const AiBadge(label: 'Tercepat')],
                     ],
                   ),
                   const SizedBox(height: 2),
-                  Text('Berangkat $clock', style: AppText.caption),
+                  Text(
+                    departure.isNow ? 'Berangkat $clock' : '${dayNames[time.weekday - 1]}, $clock',
+                    style: AppText.caption,
+                  ),
                 ],
               ),
             ),

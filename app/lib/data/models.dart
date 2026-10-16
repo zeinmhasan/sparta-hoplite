@@ -18,20 +18,67 @@ enum TrafficLevel {
   Color get tint => color.withValues(alpha: 0.16);
 }
 
-/// Jam berangkat untuk prediksi kemacetan: sekarang sampai 6 jam ke depan.
-enum Horizon {
-  now(0, 'Sekarang'),
-  m30(30, '30 menit lagi'),
-  h1(60, '1 jam lagi'),
-  h2(120, '2 jam lagi'),
-  h3(180, '3 jam lagi'),
-  h4(240, '4 jam lagi'),
-  h5(300, '5 jam lagi'),
-  h6(360, '6 jam lagi');
+const dayNames = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+const _monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 
-  const Horizon(this.minutes, this.label);
-  final int minutes;
-  final String label;
+/// Pola lalu lintas Surabaya per jam (00-23), satu digit per jam. Digit adalah
+/// indeks profil kepadatan di data rute, diurutkan dari lengang ke puncak:
+/// 7, 0, 6, 1, 5, 2, 4, 3. Simulasi: puncak pagi 07.00 dan sore 17.00 di hari
+/// kerja, salat Jumat siang, malam minggu, dan Car Free Day Minggu pagi.
+const _weekdayPattern = '777770134566161243351607';
+const _fridayPattern = '777770134562261243351607';
+const _saturdayPattern = '777777706155111522434510';
+const _sundayPattern = '777777611655666152516077';
+
+/// Indeks profil kepadatan untuk hari dan jam [time].
+int trafficProfile(DateTime time) {
+  final pattern = switch (time.weekday) {
+    DateTime.friday => _fridayPattern,
+    DateTime.saturday => _saturdayPattern,
+    DateTime.sunday => _sundayPattern,
+    _ => _weekdayPattern,
+  };
+  return int.parse(pattern[time.hour]);
+}
+
+/// Waktu berangkat untuk prediksi kemacetan. Prediksi memakai pola lalu lintas
+/// pada hari dan jam itu. [Departure.now] mengikuti jam saat dibaca.
+class Departure {
+  const Departure._(this._at);
+  Departure.at(DateTime time) : _at = time;
+
+  static const now = Departure._(null);
+
+  final DateTime? _at;
+  bool get isNow => _at == null;
+  DateTime get time => _at ?? DateTime.now();
+  int get profile => trafficProfile(time);
+
+  /// Misalnya "Hari ini", "Besok", atau "Senin, 19 Okt".
+  static String dayLabel(DateTime day, DateTime today) {
+    final diff = DateTime(day.year, day.month, day.day).difference(DateTime(today.year, today.month, today.day));
+    return switch (diff.inDays) {
+      0 => 'Hari ini',
+      1 => 'Besok',
+      _ => '${dayNames[day.weekday - 1]}, ${day.day} ${_monthNames[day.month - 1]}',
+    };
+  }
+
+  /// Misalnya "Sekarang • 14.32" atau "Besok • 07.00".
+  String get label {
+    final t = time;
+    final clock = formatClock(t).replaceAll(':', '.');
+    return isNow ? 'Sekarang • $clock' : '${dayLabel(t, DateTime.now())} • $clock';
+  }
+
+  @override
+  bool operator ==(Object other) => other is Departure && other._at == _at;
+
+  @override
+  int get hashCode => _at.hashCode;
+
+  @override
+  String toString() => isNow ? 'now' : _at!.toIso8601String();
 }
 
 enum VehicleMode {
@@ -100,9 +147,9 @@ class RouteOption {
     required this.km,
     required this.via,
     required this.points,
-    required this.minutesByHorizon,
-    required this.levelByHorizon,
-    required this.segmentsByHorizon,
+    required this.minutesByProfile,
+    required this.levelByProfile,
+    required this.segmentsByProfile,
     required this.intersections,
     required this.motorFactor,
   }) : sampler = PathSampler(points);
@@ -112,18 +159,18 @@ class RouteOption {
   final String via;
   final List<LatLng> points;
   final PathSampler sampler;
-  final List<int> minutesByHorizon;
-  final List<TrafficLevel> levelByHorizon;
-  final List<List<TrafficLevel>> segmentsByHorizon;
+  final List<int> minutesByProfile;
+  final List<TrafficLevel> levelByProfile;
+  final List<List<TrafficLevel>> segmentsByProfile;
   final List<Intersection> intersections;
   final double motorFactor;
 
-  int minutes(Horizon h, VehicleMode mode) {
-    final base = minutesByHorizon[h.index];
+  int minutes(Departure d, VehicleMode mode) {
+    final base = minutesByProfile[d.profile];
     return mode == VehicleMode.motor ? (base * motorFactor).round() : base;
   }
 
-  TrafficLevel level(Horizon h) => levelByHorizon[h.index];
+  TrafficLevel level(Departure d) => levelByProfile[d.profile];
 
   /// Rute yang sama untuk arah sebaliknya, dipakai saat asal dan tujuan ditukar.
   RouteOption reversed() => RouteOption(
@@ -131,9 +178,9 @@ class RouteOption {
     km: km,
     via: via,
     points: points.reversed.toList(),
-    minutesByHorizon: minutesByHorizon,
-    levelByHorizon: levelByHorizon,
-    segmentsByHorizon: [for (final s in segmentsByHorizon) s.reversed.toList()],
+    minutesByProfile: minutesByProfile,
+    levelByProfile: levelByProfile,
+    segmentsByProfile: [for (final s in segmentsByProfile) s.reversed.toList()],
     motorFactor: motorFactor,
     intersections: [
       for (final x in intersections.reversed)
@@ -147,13 +194,13 @@ class RouteOption {
         ),
     ],
   );
-  List<TrafficLevel> segments(Horizon h) => segmentsByHorizon[h.index];
+  List<TrafficLevel> segments(Departure d) => segmentsByProfile[d.profile];
 
   /// Potongan garis rute per ruas kepadatan, mulai dari pecahan [from] rute.
   /// Ruas yang seluruhnya sudah terlewati tidak ikut, jadi navigasi hanya
   /// menggambar sisa perjalanan.
-  List<(TrafficLevel, List<LatLng>)> remainingSlices(Horizon h, {double from = 0}) {
-    final levels = segments(h);
+  List<(TrafficLevel, List<LatLng>)> remainingSlices(Departure d, {double from = 0}) {
+    final levels = segments(d);
     final n = levels.length;
     return [
       for (var i = 0; i < n; i++)

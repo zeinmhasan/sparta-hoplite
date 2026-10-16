@@ -74,8 +74,9 @@ adb install -r build/app/outputs/flutter-apk/app-release.apk
 
 ## Yang disimulasikan
 
-- Prediksi kemacetan: delapan set data tetap per rute, satu per jam berangkat
-  (Sekarang, 30 menit, 1 sampai 6 jam). Puncaknya dibuat sekitar 2 jam dari sekarang.
+- Prediksi kemacetan: delapan set data tetap per rute (profil lengang sampai puncak). Hari dan jam
+  berangkat (hari ini sampai 6 hari ke depan) dipetakan ke profil itu oleh `trafficProfile`: puncak
+  07.00 dan 17.00 di hari kerja, salat Jumat siang, malam minggu, Car Free Day Minggu pagi.
 - Navigasi: kendaraan melaju di rute dengan kecepatan simulasi (ditampilkan 50 km/jam),
   melambat atau berhenti mengikuti siklus lampu simpang berikutnya.
 - Lampu lalu lintas: siklus tetap yang dihitung dari jam perangkat.

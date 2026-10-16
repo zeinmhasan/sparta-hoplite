@@ -81,9 +81,9 @@ class MapAttribution extends StatelessWidget {
   }
 }
 
-/// Garis rute yang diwarnai per ruas menurut kepadatan pada horizon terpilih.
+/// Garis rute yang diwarnai per ruas menurut kepadatan pada waktu berangkat terpilih.
 /// [from] adalah pecahan rute yang sudah dilewati dan tidak digambar lagi.
-PolylineLayer trafficLine(RouteOption route, Horizon horizon, {double width = 6, double from = 0}) {
+PolylineLayer trafficLine(RouteOption route, Departure departure, {double width = 6, double from = 0}) {
   return PolylineLayer(
     polylines: [
       Polyline(
@@ -91,7 +91,7 @@ PolylineLayer trafficLine(RouteOption route, Horizon horizon, {double width = 6,
         color: Colors.white,
         strokeWidth: width + 4,
       ),
-      for (final (level, points) in route.remainingSlices(horizon, from: from))
+      for (final (level, points) in route.remainingSlices(departure, from: from))
         Polyline(points: points, color: level.color, strokeWidth: width),
     ],
   );

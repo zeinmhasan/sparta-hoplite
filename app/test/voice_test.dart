@@ -33,12 +33,15 @@ class FakeEngine implements VoiceEngine {
   Future<void> stop() async {}
 }
 
+/// Senin 05.00: profil kepadatan tetap, tidak bergantung jam saat tes dijalankan.
+final _departure = Departure.at(DateTime(2026, 10, 12, 5));
+
 /// Satu perjalanan simulasi ke Tunjungan Plaza lewat rute [routeIndex].
 class Drive {
   Drive(List<String?> answers, {int routeIndex = 0}) : engine = FakeEngine(answers) {
     final routes = mock.buildRoutes('tp')!;
     final route = routes[routeIndex];
-    final scenario = mock.tripScenario(routes, route, Horizon.now);
+    final scenario = mock.tripScenario(routes, route, _departure);
     copilot = VoiceCopilot(engine);
     sim = NavSimulator(route, slowZones: scenario.slowZones(route));
     trip = TripCopilot(
@@ -46,7 +49,7 @@ class Drive {
       routes: routes,
       route: route,
       events: scenario.events,
-      minutesOf: (r) => r.minutes(Horizon.now, VehicleMode.mobil),
+      minutesOf: (r) => r.minutes(_departure, VehicleMode.mobil),
       send: (call) async => calls.add(call),
       confirm: (event, stillThere) async => confirmations.add((event.id, stillThere)),
       onReroute: (next) {

@@ -25,11 +25,11 @@ class RouteDetailScreen extends ConsumerWidget {
 
     final route = routes.firstWhere((r) => r.index == routeIndex);
     final goal = ref.watch(swappedProvider) ? mock.origin.name : ref.watch(destinationProvider).name;
-    final horizon = ref.watch(horizonProvider);
+    final departure = ref.watch(departureProvider);
     final mode = ref.watch(vehicleModeProvider);
     final now = ref.watch(nowProvider);
-    final minutes = route.minutes(horizon, mode);
-    final isBest = rankRoutes(routes, horizon, mode).first.index == route.index;
+    final minutes = route.minutes(departure, mode);
+    final isBest = rankRoutes(routes, departure, mode).first.index == route.index;
 
     return Scaffold(
       body: Column(
@@ -42,7 +42,7 @@ class RouteDetailScreen extends ConsumerWidget {
                   fitPoints: route.points,
                   padding: const EdgeInsets.fromLTRB(40, 96, 40, 44),
                   layers: [
-                    trafficLine(route, horizon),
+                    trafficLine(route, departure),
                     MarkerLayer(
                       markers: [
                         dotMarker(route.points.first, AppColors.navy),
@@ -97,7 +97,7 @@ class RouteDetailScreen extends ConsumerWidget {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              '${arrivalLabel(now, horizon, minutes)} • ${route.kmLabel} • $goal',
+                              '${arrivalLabel(departure, minutes)} • ${route.kmLabel} • $goal',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: AppText.caption.copyWith(fontSize: 13),
@@ -105,7 +105,7 @@ class RouteDetailScreen extends ConsumerWidget {
                           ],
                         ),
                       ),
-                      StatusBadge(route.level(horizon)),
+                      StatusBadge(route.level(departure)),
                     ],
                   ),
                   const SizedBox(height: 18),
@@ -123,9 +123,9 @@ class RouteDetailScreen extends ConsumerWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(departureLabel(now, horizon), style: AppText.bodyStrong.copyWith(fontSize: 13)),
+                              Text(departureLabel(departure), style: AppText.bodyStrong.copyWith(fontSize: 13)),
                               const SizedBox(height: 3),
-                              Text(mock.routeNote(route, horizon), style: AppText.caption.copyWith(height: 1.4)),
+                              Text(mock.routeNote(route, departure), style: AppText.caption.copyWith(height: 1.4)),
                             ],
                           ),
                         ),

@@ -96,7 +96,7 @@ class _Navigation3dScreenState extends ConsumerState<Navigation3dScreen> with Si
   Map<String, dynamic> _routeLine(double meters) {
     final route = _trip.route;
     return featureCollection([
-      for (final (level, points) in route.remainingSlices(_trip.horizon, from: meters / route.sampler.totalMeters))
+      for (final (level, points) in route.remainingSlices(_trip.departure, from: meters / route.sampler.totalMeters))
         {
           'type': 'Feature',
           'properties': {'color': _hex(level.color)},

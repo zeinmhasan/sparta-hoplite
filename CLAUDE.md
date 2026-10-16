@@ -77,9 +77,9 @@ Belum diuji di perangkat:
 - Navigasi 3D: gestur dua jari, tombol `-`, tombol 2D/3D, Pusatkan, lembar lampu, tombol tutup,
   cadangan 12 detik ke `/navigate-2d`, dan berhenti penuh di lampu merah.
 - Navigasi cadangan (`navigation_screen.dart`) setelah dirapikan memakai `nav_sim.dart` dan `nav_widgets.dart`.
-- Build release di HP sungguhan. `SPARTA-Hoplite-v1.0.0.apk` (di root repo, hasil `flutter build apk --release`
-  per 2026-10-08) baru dicoba di emulator: beranda, rute, dan navigasi 3D jalan. Bangun ulang jika kode berubah.
-  APK itu belum memuat Voice Co-Pilot.
+- Build release di HP sungguhan. `SPARTA-Hoplite-v1.0.0.apk` (di root repo, dibangun ulang 2026-10-16 lewat
+  `gradlew assembleRelease` + init script NDK 27) memuat Voice Co-Pilot, Panic Button dua kontak (Command Center,
+  Bengkel Terdekat), dan pemilih hari + jam berangkat. Belum dicoba di perangkat. Bangun ulang jika kode berubah.
 
 Belum diputuskan pengguna:
 

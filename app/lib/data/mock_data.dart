@@ -139,9 +139,9 @@ String weatherImpact(int hour) {
   return 'Cuaca malam ini berawan tanpa hujan. Tidak ada dampak cuaca pada perjalanan.';
 }
 
-// Satu baris per rute, satu kolom per jam berangkat (Sekarang, 30 mnt, 1-6 jam).
-// Puncak kepadatan disimulasikan sekitar 2 jam dari sekarang. Rute pertama paling
-// terdampak, sehingga rekomendasi AI berpindah rute pada jam berangkat tertentu.
+// Satu baris per rute, satu kolom per profil kepadatan (lihat trafficProfile di models.dart,
+// yang memetakan hari dan jam berangkat ke kolom ini). Kolom 3 adalah jam puncak. Rute pertama
+// paling terdampak, sehingga rekomendasi AI berpindah rute pada jam sibuk.
 const _segmentPatterns = [
   ['LLSLLL', 'LSSLLL', 'LSPSSL', 'SPPPSL', 'LSPPSL', 'LSSSLL', 'LLSLLL', 'LLLLLL'],
   ['LSSPSL', 'LSSPSL', 'SSSPSL', 'SSPPSS', 'SSPPSS', 'LSSPSL', 'LSSSSL', 'LSSLLL'],
@@ -177,9 +177,9 @@ List<RouteOption> routesFromGeo(List<RouteGeo> geos) {
         km: geos[i].km,
         via: geos[i].via,
         points: [for (final p in geos[i].pts) LatLng(p[0], p[1])],
-        minutesByHorizon: [for (final d in _delayPatterns[i]) (geos[i].km * 2.35).round() + d],
-        levelByHorizon: _levelPatterns[i],
-        segmentsByHorizon: [for (final p in _segmentPatterns[i]) _parse(p)],
+        minutesByProfile: [for (final d in _delayPatterns[i]) (geos[i].km * 2.35).round() + d],
+        levelByProfile: _levelPatterns[i],
+        segmentsByProfile: [for (final p in _segmentPatterns[i]) _parse(p)],
         motorFactor: _motorFactors[i],
         intersections: [
           for (var j = 0; j < geos[i].cross.length; j++)
@@ -195,12 +195,16 @@ List<RouteOption> routesFromGeo(List<RouteGeo> geos) {
   ];
 }
 
-/// Catatan AI di Detail Rute, satu kalimat per horizon.
-String routeNote(RouteOption route, Horizon h) {
-  final delta = route.minutesByHorizon[h.index] - route.minutesByHorizon[0];
-  if (h == Horizon.now) return 'Kondisi saat ini dari data ATCS.';
-  if (delta <= 0) return 'Kondisi rute ini diprediksi sama lancarnya dengan sekarang.';
-  return 'Sebagian ruas diprediksi lebih padat dibanding sekarang. ETA bertambah $delta menit.';
+/// Catatan AI di Detail Rute, sesuai hari dan jam berangkat.
+String routeNote(RouteOption route, Departure d) {
+  // Profil 7 adalah kondisi paling lengang (dini hari).
+  final delta = route.minutesByProfile[d.profile] - route.minutesByProfile[7];
+  final source = d.isNow
+      ? 'Kondisi saat ini dari data ATCS'
+      : 'Prediksi dari pola ${dayNames[d.time.weekday - 1]} '
+            'pukul ${d.time.hour.toString().padLeft(2, '0')}.00 beberapa pekan terakhir';
+  if (delta <= 0) return '$source. Rute ini lengang seperti dini hari.';
+  return '$source. ETA $delta menit lebih lama dibanding saat lengang.';
 }
 
 // ------------------------------------------------------------- Suroboyo Bus
@@ -423,7 +427,7 @@ String roadAt(RouteOption route, double meters) {
 ///    berpisah, sehingga ada rute alternatif yang menghindarinya,
 /// 3. genangan menjelang tujuan di tiap rute, dan
 /// 4. satu kejadian di luar rute, yang tidak boleh ikut disiarkan.
-TripScenario tripScenario(List<RouteOption> routes, RouteOption start, Horizon horizon) {
+TripScenario tripScenario(List<RouteOption> routes, RouteOption start, Departure departure) {
   final total = start.sampler.totalMeters;
   var split = 0.0;
   for (final other in routes) {
@@ -431,7 +435,7 @@ TripScenario tripScenario(List<RouteOption> routes, RouteOption start, Horizon h
   }
 
   final earliest = (split + 500) / total;
-  final levels = start.segments(horizon);
+  final levels = start.segments(departure);
   var worst = -1;
   for (var i = 0; i < levels.length; i++) {
     final center = (i + 0.5) / levels.length;
@@ -470,37 +474,16 @@ RoadEvent _puddle(RouteOption route, double fraction) => RoadEvent(
 
 const emergencyContacts = [
   EmergencyContact(
-    name: 'Ambulans',
-    number: '118',
-    icon: Icons.medical_services_rounded,
+    name: 'Command Center',
+    number: '112 · Command Center Surabaya',
+    icon: Icons.support_agent_rounded,
     color: AppColors.emergency,
     numberColor: AppColors.emergency,
   ),
   EmergencyContact(
-    name: 'Pemadam Kebakaran',
-    number: '113',
-    icon: Icons.fire_truck_rounded,
-    color: AppColors.emergency,
-    numberColor: AppColors.emergency,
-  ),
-  EmergencyContact(
-    name: 'Polisi',
-    number: '110',
-    icon: Icons.local_police_rounded,
-    color: AppColors.navy,
-    numberColor: AppColors.navy,
-  ),
-  EmergencyContact(
-    name: 'Derek',
-    number: '031-1234567',
+    name: 'Bengkel Terdekat',
+    number: 'Bengkel Keputih Motor · 450 m',
     icon: Icons.car_repair_rounded,
-    color: Color(0xFF4A4A4F),
-    numberColor: AppColors.textSecondary,
-  ),
-  EmergencyContact(
-    name: 'Bengkel',
-    number: 'Cari bengkel terdekat',
-    icon: Icons.home_repair_service_rounded,
     color: Color(0xFF8A6D00),
     numberColor: AppColors.textSecondary,
   ),

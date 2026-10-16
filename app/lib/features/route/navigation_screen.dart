@@ -101,7 +101,7 @@ class _NavigationScreenState extends ConsumerState<NavigationScreen> with Ticker
     _frame.value = frame;
   }
 
-  Widget _buildMap(RouteOption route, Horizon horizon, DateTime now, double tilt) {
+  Widget _buildMap(RouteOption route, Departure departure, DateTime now, double tilt) {
     // Marker ikut memipih saat peta direbahkan; tarik ke atas agar tetap terbaca.
     final stretch = 1 / math.cos(tilt);
     return AppMap(
@@ -118,7 +118,7 @@ class _NavigationScreenState extends ConsumerState<NavigationScreen> with Ticker
         ValueListenableBuilder(
           valueListenable: _frame,
           builder: (context, frame, _) =>
-              trafficLine(route, horizon, width: 13, from: (frame?.meters ?? 0) / route.sampler.totalMeters),
+              trafficLine(route, departure, width: 13, from: (frame?.meters ?? 0) / route.sampler.totalMeters),
         ),
         MarkerLayer(
           markers: [
@@ -166,8 +166,8 @@ class _NavigationScreenState extends ConsumerState<NavigationScreen> with Ticker
 
     final trip = _trip;
     final route = trip?.route ?? routes.firstWhere((r) => r.index == widget.routeIndex);
-    final horizon = ref.watch(horizonProvider);
-    final minutes = route.minutes(horizon, ref.watch(vehicleModeProvider));
+    final departure = ref.watch(departureProvider);
+    final minutes = route.minutes(departure, ref.watch(vehicleModeProvider));
     final now = ref.watch(nowProvider);
     final safe = MediaQuery.paddingOf(context);
 
@@ -196,7 +196,7 @@ class _NavigationScreenState extends ConsumerState<NavigationScreen> with Ticker
                       transform: Matrix4.identity()
                         ..setEntry(3, 2, _perspective)
                         ..rotateX(-tilt),
-                      child: _buildMap(route, horizon, now, tilt),
+                      child: _buildMap(route, departure, now, tilt),
                     );
                   },
                 ),

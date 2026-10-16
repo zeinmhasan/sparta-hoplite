@@ -13,11 +13,11 @@ import 'nav_sim.dart';
 class TripSession {
   TripSession(WidgetRef ref, int routeIndex, {required VoidCallback onReroute})
     : copilot = ref.read(copilotProvider),
-      horizon = ref.read(horizonProvider),
+      departure = ref.read(departureProvider),
       vehicle = ref.read(vehicleModeProvider) {
     final routes = ref.read(tripRoutesProvider).value!;
     final route = routes.firstWhere((r) => r.index == routeIndex);
-    final scenario = mock.tripScenario(routes, route, horizon);
+    final scenario = mock.tripScenario(routes, route, departure);
     final repository = ref.read(repositoryProvider);
     final reports = ref.read(reportsProvider.notifier);
 
@@ -27,7 +27,7 @@ class TripSession {
       routes: routes,
       route: route,
       events: scenario.events,
-      minutesOf: (r) => r.minutes(horizon, vehicle),
+      minutesOf: (r) => r.minutes(departure, vehicle),
       send: (call) async => reports.add(await repository.reportTraffic(call)),
       confirm: (event, stillThere) => repository.confirmEvent(event, stillThere: stillThere),
       onReroute: (next) {
@@ -39,13 +39,13 @@ class TripSession {
   }
 
   final VoiceCopilot copilot;
-  final Horizon horizon;
+  final Departure departure;
   final VehicleMode vehicle;
   late final NavSimulator sim;
   late final TripCopilot trip;
 
   RouteOption get route => sim.route;
-  int get minutes => route.minutes(horizon, vehicle);
+  int get minutes => route.minutes(departure, vehicle);
 
   /// Memajukan kendaraan [dt] detik dan memberi tahu co-pilot.
   NavFrame step(double dt, DateTime now) {

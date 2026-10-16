@@ -12,7 +12,7 @@ final _clockProvider = StreamProvider<DateTime>(
 );
 final nowProvider = Provider<DateTime>((ref) => ref.watch(_clockProvider).value ?? DateTime.now());
 
-final horizonProvider = StateProvider<Horizon>((ref) => Horizon.now);
+final departureProvider = StateProvider<Departure>((ref) => Departure.now);
 final vehicleModeProvider = StateProvider<VehicleMode>((ref) => VehicleMode.mobil);
 
 /// True jika asal dan tujuan ditukar: berangkat dari tempat terpilih menuju Lokasi Saya.
@@ -48,7 +48,7 @@ class ReportsNotifier extends StateNotifier<List<Report>> {
 
 final reportsProvider = StateNotifierProvider<ReportsNotifier, List<Report>>((ref) => ReportsNotifier());
 
-/// Rute diurutkan dari yang tercepat untuk horizon dan kendaraan terpilih;
+/// Rute diurutkan dari yang tercepat untuk waktu berangkat dan kendaraan terpilih;
 /// yang pertama menjadi Rute Rekomendasi AI.
-List<RouteOption> rankRoutes(List<RouteOption> routes, Horizon h, VehicleMode mode) =>
-    [...routes]..sort((a, b) => a.minutes(h, mode).compareTo(b.minutes(h, mode)));
+List<RouteOption> rankRoutes(List<RouteOption> routes, Departure d, VehicleMode mode) =>
+    [...routes]..sort((a, b) => a.minutes(d, mode).compareTo(b.minutes(d, mode)));

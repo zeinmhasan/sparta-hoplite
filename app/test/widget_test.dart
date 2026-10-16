@@ -6,26 +6,34 @@ import 'package:sparta_hoplite/data/models.dart';
 import 'package:sparta_hoplite/data/state.dart';
 
 void main() {
-  test('setiap tujuan punya tiga rute dengan simpang dan data per horizon', () {
+  // Senin 12 Oktober 2026: 05.00 masih lengang, 17.00 puncak jam pulang kerja.
+  final quiet = Departure.at(DateTime(2026, 10, 12, 5));
+  final rush = Departure.at(DateTime(2026, 10, 12, 17));
+  final week = [
+    for (var day = 12; day <= 18; day++)
+      for (var hour = 0; hour < 24; hour++) Departure.at(DateTime(2026, 10, day, hour)),
+  ];
+
+  test('setiap tujuan punya tiga rute dengan simpang dan data per profil kepadatan', () {
     for (final place in mock.places) {
       final routes = mock.buildRoutes(place.id)!;
       expect(routes, hasLength(3), reason: place.name);
       for (final route in routes) {
         expect(route.points.length, greaterThan(10));
         expect(route.intersections, isNotEmpty);
-        expect(route.minutesByHorizon, hasLength(Horizon.values.length));
-        expect(route.levelByHorizon, hasLength(Horizon.values.length));
-        expect(route.segments(Horizon.h6), hasLength(6));
+        expect(route.minutesByProfile, hasLength(8));
+        expect(route.levelByProfile, hasLength(8));
+        expect(route.segments(rush), hasLength(6));
       }
     }
   });
 
-  test('rute rekomendasi adalah yang tercepat untuk horizon dan kendaraan terpilih', () {
+  test('rute rekomendasi adalah yang tercepat untuk departure dan kendaraan terpilih', () {
     final routes = mock.buildRoutes('tp')!;
-    for (final horizon in Horizon.values) {
+    for (final departure in week) {
       for (final mode in VehicleMode.values) {
-        final ranked = rankRoutes(routes, horizon, mode);
-        expect(ranked.first.minutes(horizon, mode), lessThanOrEqualTo(ranked.last.minutes(horizon, mode)));
+        final ranked = rankRoutes(routes, departure, mode);
+        expect(ranked.first.minutes(departure, mode), lessThanOrEqualTo(ranked.last.minutes(departure, mode)));
       }
     }
   });
@@ -39,12 +47,21 @@ void main() {
     expect(states.any((s) => !s.green), isTrue);
   });
 
-  test('rekomendasi AI berpindah rute saat prediksi 2 jam ke depan lebih padat', () {
+  test('rekomendasi AI berpindah rute saat jam sibuk', () {
     final routes = mock.buildRoutes('tp')!;
-    expect(rankRoutes(routes, Horizon.now, VehicleMode.mobil).first.index, 0);
-    expect(rankRoutes(routes, Horizon.h2, VehicleMode.mobil).first.index, 1);
+    expect(rankRoutes(routes, quiet, VehicleMode.mobil).first.index, 0);
+    expect(rankRoutes(routes, rush, VehicleMode.mobil).first.index, 1);
     final eta = routes.first.minutes;
-    expect(eta(Horizon.h2, VehicleMode.mobil) - eta(Horizon.now, VehicleMode.mobil), greaterThan(10));
+    expect(eta(rush, VehicleMode.mobil) - eta(quiet, VehicleMode.mobil), greaterThan(10));
+  });
+
+  test('prediksi mengikuti hari dan jam berangkat', () {
+    // Jumat siang ada salat Jumat, Senin siang tidak.
+    expect(trafficProfile(DateTime(2026, 10, 16, 12)), isNot(trafficProfile(DateTime(2026, 10, 12, 12))));
+    // Minggu 17.00 tidak sepadat Senin 17.00.
+    final routes = mock.buildRoutes('tp')!;
+    final sunday = Departure.at(DateTime(2026, 10, 18, 17));
+    expect(routes.first.minutes(sunday, VehicleMode.mobil), lessThan(routes.first.minutes(rush, VehicleMode.mobil)));
   });
 
   test('rute yang ditukar berjalan terbalik dengan simpang yang sama', () {
@@ -53,7 +70,7 @@ void main() {
     expect(back.points.first, route.points.last);
     expect(back.intersections.first.roads, route.intersections.last.roads.reversed.toList());
     expect(back.intersections.first.fraction, closeTo(1 - route.intersections.last.fraction, 1e-9));
-    expect(back.segments(Horizon.h1), route.segments(Horizon.h1).reversed.toList());
+    expect(back.segments(rush), route.segments(rush).reversed.toList());
   });
 
   test('arah hadap mengikuti arah garis', () {
@@ -76,12 +93,12 @@ void main() {
 
   test('garis rute navigasi hanya memuat sisa perjalanan', () {
     final route = mock.buildRoutes('tp')!.first;
-    final levels = route.segments(Horizon.now);
-    expect(route.remainingSlices(Horizon.now), hasLength(levels.length));
+    final levels = route.segments(quiet);
+    expect(route.remainingSlices(quiet), hasLength(levels.length));
 
     // Di tengah ruas keempat dari enam: tiga ruas pertama hilang, dan garis mulai tepat di kendaraan.
     const from = 3.5 / 6;
-    final rest = route.remainingSlices(Horizon.now, from: from);
+    final rest = route.remainingSlices(quiet, from: from);
     expect([for (final (level, _) in rest) level], levels.sublist(3));
     expect(rest.first.$2.first, route.sampler.at(from));
     expect(rest.last.$2.last, route.points.last);

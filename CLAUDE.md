@@ -107,9 +107,8 @@ Belum diuji di perangkat:
 - Navigasi 3D: gestur dua jari, tombol `-`, tombol 2D/3D, Pusatkan, lembar lampu, tombol tutup,
   cadangan 12 detik ke `/navigate-2d`, dan berhenti penuh di lampu merah.
 - Navigasi cadangan (`navigation_screen.dart`) setelah dirapikan memakai `nav_sim.dart` dan `nav_widgets.dart`.
-- Build release di HP sungguhan. Di laptop rayahmd, `SPARTA-Hoplite-v1.0.0.apk` (2026-10-16) dibangun sebelum
-  merge `main` 2026-10-12: memuat Panic Button dua kontak dan pemilih hari + jam berangkat, tetapi belum memuat
-  revisi Pulse Report, Laporan Warga, dan Saldo Pulse. Bangun ulang.
+- Build release di HP sungguhan. Di laptop rayahmd, `SPARTA-Hoplite-v1.2.0.apk` (2026-10-16, root repo) dibangun
+  setelah merge `main`: memuat semua revisi sampai pemilih hari + jam berangkat. Belum dicoba di perangkat.
 
 Revisi 2026-10-16 (rayahmd): Panic Button hanya Command Center (112) dan Bengkel Terdekat. Pemilih jam berangkat
 kini memilih hari (hari ini sampai 6 hari ke depan) lalu jam; prediksi memakai pola per hari dan jam
